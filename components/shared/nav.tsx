@@ -1,0 +1,46 @@
+import Link from "next/link";
+import { isAdmin } from "@/lib/admin";
+import { SachBalance } from "@/components/wallet/sach-balance";
+import { shortAddress } from "@/lib/format";
+
+/** Top navigation for the authenticated app. */
+export function Nav({ address }: { address: string }) {
+  return (
+    <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-border bg-background/80 px-4 py-3 backdrop-blur">
+      <Link href="/" className="text-sm font-semibold tracking-tight">
+        Sachet
+      </Link>
+      <nav className="flex items-center gap-3 text-sm text-muted-foreground">
+        <Link href="/" className="transition-colors hover:text-foreground">
+          Board
+        </Link>
+        <Link
+          href="/my-bets"
+          className="transition-colors hover:text-foreground"
+        >
+          My bets
+        </Link>
+        <Link
+          href="/leaderboard"
+          className="transition-colors hover:text-foreground"
+        >
+          Leaderboard
+        </Link>
+        {isAdmin(address) && (
+          <Link
+            href="/admin"
+            className="transition-colors hover:text-foreground"
+          >
+            Admin
+          </Link>
+        )}
+      </nav>
+      <div className="ml-auto flex items-center gap-2">
+        <SachBalance />
+        <span className="hidden text-xs text-muted-foreground sm:inline">
+          {shortAddress(address)}
+        </span>
+      </div>
+    </header>
+  );
+}

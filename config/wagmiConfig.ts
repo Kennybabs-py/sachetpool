@@ -1,10 +1,11 @@
 import { createConfig, http } from "wagmi";
-import { mainnet, sepolia } from "wagmi/chains";
+import { chain, RPC_URL } from "./chains";
 
+/** Wagmi config for the single Robinhood Chain. */
 export const wagmiConfig = createConfig({
-  chains: [mainnet, sepolia],
+  chains: [chain],
   transports: {
-    [mainnet.id]: http(),
-    [sepolia.id]: http(),
+    [chain.id]: http(RPC_URL),
   },
+  ssr: true,
 });

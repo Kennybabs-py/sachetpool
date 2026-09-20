@@ -40,4 +40,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/prisma/generated/prisma
+# generated Prisma client (repo-root output)
+/generated/prisma
+
+# foundry build artifacts and vendored dependencies
+/contracts/out
+/contracts/cache
+/contracts/broadcast
+# Install with `forge install foundry-rs/forge-std OpenZeppelin/openzeppelin-contracts`.
+/contracts/lib
+
+/reference-app
