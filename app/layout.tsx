@@ -3,6 +3,8 @@ import { Inter, Geist_Mono, Google_Sans_Flex } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import AppProvider from "@/components/shared/app-provider";
+import { ThemeProvider } from "@/components/shared/theme-provider";
+import { SmoothScroll } from "@/components/shared/smooth-scroll";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -30,6 +32,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={cn(
         "h-full",
         "antialiased",
@@ -40,7 +43,16 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-full flex flex-col">
-        <AppProvider>{children}</AppProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
+          <SmoothScroll>
+            <AppProvider>{children}</AppProvider>
+          </SmoothScroll>
+        </ThemeProvider>
       </body>
     </html>
   );

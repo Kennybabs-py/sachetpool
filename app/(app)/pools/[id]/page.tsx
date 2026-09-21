@@ -22,7 +22,7 @@ export default async function PoolDetailPage({
   return (
     <div className="flex flex-col gap-4">
       <Link
-        href="/"
+        href="/board"
         className="text-xs text-muted-foreground transition-colors hover:text-foreground"
       >
         ← Board

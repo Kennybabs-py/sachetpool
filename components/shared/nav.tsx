@@ -1,17 +1,18 @@
 import Link from "next/link";
 import { isAdmin } from "@/lib/admin";
 import { SachBalance } from "@/components/wallet/sach-balance";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { shortAddress } from "@/lib/format";
 
 /** Top navigation for the authenticated app. */
 export function Nav({ address }: { address: string }) {
   return (
     <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-border bg-background/80 px-4 py-3 backdrop-blur">
-      <Link href="/" className="text-sm font-semibold tracking-tight">
+      <Link href="/board" className="text-sm font-semibold tracking-tight">
         Sachet
       </Link>
       <nav className="flex items-center gap-3 text-sm text-muted-foreground">
-        <Link href="/" className="transition-colors hover:text-foreground">
+        <Link href="/board" className="transition-colors hover:text-foreground">
           Board
         </Link>
         <Link
@@ -40,6 +41,7 @@ export function Nav({ address }: { address: string }) {
         <span className="hidden text-xs text-muted-foreground sm:inline">
           {shortAddress(address)}
         </span>
+        <ThemeToggle />
       </div>
     </header>
   );

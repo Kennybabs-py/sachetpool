@@ -8,7 +8,7 @@ import {
   resolvePoolAction,
   type ActionResult,
 } from "@/app/(app)/admin/actions";
-import { Button } from "@/components/ui/button";
+import { PrimaryButton } from "@/components/common/primary-button";
 
 /**
  * Admin dashboard interactivity. Renders the "open a pool" queue and the
@@ -42,9 +42,7 @@ function Feedback({ result }: { result: ActionResult | null }) {
   return (
     <p
       className={
-        result.ok
-          ? "text-xs text-muted-foreground"
-          : "text-xs text-destructive"
+        result.ok ? "text-xs text-muted-foreground" : "text-xs text-destructive"
       }
       role={result.ok ? "status" : "alert"}
     >
@@ -100,7 +98,8 @@ function OpenPoolSection({ candidates }: { candidates: MatchCandidate[] }) {
             onChange={(e) => {
               setMatchId(e.target.value);
               const next = candidates.find((c) => c.id === e.target.value);
-              if (next) setClosesAt(toLocalInputValue(new Date(next.kickoffAt)));
+              if (next)
+                setClosesAt(toLocalInputValue(new Date(next.kickoffAt)));
             }}
           >
             {candidates.map((c) => (
@@ -134,9 +133,13 @@ function OpenPoolSection({ candidates }: { candidates: MatchCandidate[] }) {
           />
         </label>
 
-        <Button type="button" onClick={submit} disabled={pending || !selected}>
+        <PrimaryButton
+          type="button"
+          onClick={submit}
+          disabled={pending || !selected}
+        >
           {pending ? "Opening…" : "Open pool"}
-        </Button>
+        </PrimaryButton>
       </div>
       <div className="mt-2">
         <Feedback result={result} />
@@ -199,7 +202,7 @@ function ResolveRow({ pool }: { pool: AdminPool }) {
             </option>
           ))}
         </select>
-        <Button
+        <PrimaryButton
           type="button"
           size="sm"
           disabled={pending}
@@ -214,7 +217,7 @@ function ResolveRow({ pool }: { pool: AdminPool }) {
           }
         >
           {pending ? "Resolving…" : "Resolve"}
-        </Button>
+        </PrimaryButton>
       </div>
     </li>
   );

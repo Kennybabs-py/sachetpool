@@ -6,7 +6,7 @@ import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { MARKET_ADDRESS } from "@/config/chains";
 import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
-import { Button } from "@/components/ui/button";
+import { PrimaryButton } from "@/components/common/primary-button";
 
 /**
  * Pull-payment trigger for a resolved bet. Winners (and void refundees) call
@@ -51,9 +51,9 @@ export function ClaimButton({ onchainPoolId }: { onchainPoolId: string }) {
 
   return (
     <div className="flex flex-col items-end gap-1">
-      <Button type="button" size="sm" onClick={claim} disabled={pending}>
+      <PrimaryButton type="button" size="sm" onClick={claim} disabled={pending}>
         {pending ? "Claiming…" : "Claim"}
-      </Button>
+      </PrimaryButton>
       {error && (
         <span className="text-xs text-destructive" role="alert">
           {error}

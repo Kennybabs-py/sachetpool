@@ -16,13 +16,14 @@ import {
 import { erc20Abi } from "@/lib/contracts/erc20";
 import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
 import {
-  useAccount,
+  useConnection,
   usePublicClient,
   useReadContract,
   useWriteContract,
 } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { Button } from "@/components/ui/button";
+import { PrimaryButton } from "@/components/common/primary-button";
 import {
   Drawer,
   DrawerContent,
@@ -68,10 +69,10 @@ export function BetSheet({
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const { address, isConnected } = useAccount();
+  const { address, isConnected } = useConnection();
   const { openConnectModal } = useConnectModal();
   const publicClient = usePublicClient();
-  const { writeContractAsync } = useWriteContract();
+  const { mutateAsync } = useWriteContract();
 
   const { data: balance, refetch: refetchBalance } = useReadContract({
     address: TOKEN_ADDRESS,
@@ -85,8 +86,7 @@ export function BetSheet({
     address: TOKEN_ADDRESS,
     abi: erc20Abi,
     functionName: "allowance",
-    args:
-      address && MARKET_ADDRESS ? [address, MARKET_ADDRESS] : undefined,
+    args: address && MARKET_ADDRESS ? [address, MARKET_ADDRESS] : undefined,
     query: { enabled: Boolean(address && TOKEN_ADDRESS && MARKET_ADDRESS) },
   });
 
@@ -155,7 +155,7 @@ export function BetSheet({
     try {
       if (needsApproval) {
         setPhase("approving");
-        const approveHash = await writeContractAsync({
+        const approveHash = await mutateAsync({
           address: TOKEN_ADDRESS,
           abi: erc20Abi,
           functionName: "approve",
@@ -166,7 +166,7 @@ export function BetSheet({
       }
 
       setPhase("betting");
-      const betHash = await writeContractAsync({
+      const betHash = await mutateAsync({
         address: MARKET_ADDRESS,
         abi: sachetMarketAbi,
         functionName: "bet",
@@ -238,8 +238,7 @@ export function BetSheet({
               htmlFor="stake"
               className="mb-1 block text-xs font-medium text-muted-foreground"
             >
-              Stake ({TOKEN_SYMBOL}) · min{" "}
-              {formatToken(min, TOKEN_DECIMALS)}
+              Stake ({TOKEN_SYMBOL}) · min {formatToken(min, TOKEN_DECIMALS)}
             </label>
             <input
               id="stake"
@@ -305,9 +304,7 @@ export function BetSheet({
             <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
               <span>Projected profit</span>
               <span className="tabular-nums">
-                {profit > 0n
-                  ? `+${formatToken(profit, TOKEN_DECIMALS)}`
-                  : "—"}
+                {profit > 0n ? `+${formatToken(profit, TOKEN_DECIMALS)}` : "—"}
               </span>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
@@ -325,11 +322,20 @@ export function BetSheet({
 
         <DrawerFooter>
           {!isConnected ? (
-            <Button type="button" size="lg" onClick={() => openConnectModal?.()}>
+            <PrimaryButton
+              type="button"
+              size="lg"
+              onClick={() => openConnectModal?.()}
+            >
               Connect wallet
-            </Button>
+            </PrimaryButton>
           ) : (
-            <Button type="button" size="lg" onClick={submit} disabled={!valid || busy}>
+            <PrimaryButton
+              type="button"
+              size="lg"
+              onClick={submit}
+              disabled={!valid || busy}
+            >
               {phase === "approving"
                 ? "Approving…"
                 : phase === "betting"
@@ -346,7 +352,7 @@ export function BetSheet({
                         : tooSmall
                           ? `Minimum ${formatToken(min, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}`
                           : "Enter a stake"}
-            </Button>
+            </PrimaryButton>
           )}
           <Button
             type="button"
