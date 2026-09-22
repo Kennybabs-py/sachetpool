@@ -168,35 +168,27 @@ must change with it.
 
 **Trusted actors**
 
-- **Operator** (server hot key): can `createPool`, `resolve`, `setOperator`,
-  `setMinStake`, `withdrawTreasury`. Cannot move user stake except by correctly
-  resolving, and can only withdraw accrued `treasuryBalance`.
+- **Admin**: Can pause the market, change the token, launch/cancel pools, and sweep treasury.
+- **Resolver**: Only role capable of providing the outcome to a pool.
 - **Admin allowlist** (app layer, `ADMIN_ADDRESSES`): off-chain gate on who may
-  _trigger_ operator actions. It is not an on-chain role.
+  _trigger_ admin actions via the UI.
 
 **Bettors**: unprivileged; only their own tokens in/out.
 
 **Invariants**
 
-1. Sum of all `claim` payouts for a pool `<= totalStake - treasuryCredit`
-   (fuzz: `testFuzz_ClaimSumNeverExceedsDistributable`).
-2. A refund returns the exact stake (fuzz: `testFuzz_RefundAlwaysReturnsExactStake`).
-3. `treasuryBalance <= sum of rake on resolved pools`.
-4. A pool can be resolved at most once; a pool id can be created once.
-5. Betting is impossible at/after `expiresAt`; resolution is impossible before it.
-6. Token movements use `SafeERC20`; `bet` and `claim` are `nonReentrant` with
-   checks-effects-interactions (state updated before transfer).
+1. Users can safely withdraw their active bets any time before `expiresAt`.
+2. A pool cannot be bet on after `expiresAt`.
+3. Changing betting outcomes requires withdrawing the active bet first (setting `amount` to 0).
+4. Critical protocol updates (`updateToken`, `withdrawTreasury`) require the contract to be paused (`whenPaused`).
+5. All token transfers implement OpenZeppelin's `SafeERC20`.
+6. State changes occur before external calls (Checks-Effects-Interactions) inside `nonReentrant` functions.
+7. Token movements use `SafeERC20`; `placeBet`, `withdrawBet`, and `claim` are `nonReentrant`.
 
 **Known accepted trade-offs**
 
-- Rake is floored off the _total_ pot before being split; the dust remainder
-  stays locked in the contract (harmless, and bounded by wei-level rounding
-  across users).
-- `treasury` is immutable in the constructor, while `withdrawTreasury` takes a
-  recipient — the operator chooses where to sweep, which is intentional (the
-  constructor's `treasury` is the nominal owner and must be non-zero).
 - The contract assumes a standard, non-fee-on-transfer, non-rebasing ERC-20. A
-  fee-on-transfer token would break the escrow accounting; `$SACH` must be plain.
+  fee-on-transfer token would break the escrow accounting; the token must be plain.
 
 ---
 
