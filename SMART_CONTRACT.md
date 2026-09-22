@@ -213,7 +213,7 @@ forge test -vvv          # from contracts/
 yarn forge:test          # forge test --root contracts
 ```
 
-`foundry.toml`: solc `0.8.24`, optimizer on (`runs = 200`), fuzz `runs = 256`.
+`foundry.toml`: solc `0.8.24`, optimizer on (`runs = 200`), fuzz `runs = 256`. Includes 30 extensive tests covering fuzzing invariants, payout distribution, void refunds, pause mechanics, and admin sweeps.
 
 ### Export ABI & deploy
 
