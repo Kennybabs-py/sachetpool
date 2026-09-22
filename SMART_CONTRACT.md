@@ -229,9 +229,7 @@ yarn deploy:market       # prints MARKET_ADDRESS + MARKET_DEPLOY_BLOCK
 ```
 
 Required env for deploy: `RPC_URL`, `SACH_TOKEN_ADDRESS`, `TREASURY_ADDRESS`,
-`OPERATOR_PRIVATE_KEY`, `DEPLOYER_PRIVATE_KEY`, `MIN_STAKE`. The operator
-address is derived from `OPERATOR_PRIVATE_KEY` so it can never drift from the
-key the app signs with.
+`OPERATOR_PRIVATE_KEY` (or equivalent for admin/resolver keys), `DEPLOYER_PRIVATE_KEY`.
 
 After deploy, set `MARKET_ADDRESS` and `MARKET_DEPLOY_BLOCK` (server + matching
 `NEXT_PUBLIC_*` mirror for the address) in the app env. The indexer starts at
