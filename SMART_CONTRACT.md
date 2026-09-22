@@ -135,8 +135,8 @@ poolId = keccak256(utf8("sachet:1x2:" + match.externalId))
 
 `lib/onchain.ts::computeOnchainPoolId` is the single implementation; the admin
 action (`app/(app)/admin/actions.ts`) persists it on the `Pool` row and passes
-the same value to `createPool`. `createPool` also rejects a reused id
-(`PoolExists`), so the mapping is enforceable on-chain.
+the same value to `launchPool`. `launchPool` also rejects a reused id
+(`PoolAlreadyExists`), so the mapping is enforceable on-chain.
 
 ---
 
