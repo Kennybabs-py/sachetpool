@@ -3,428 +3,572 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {SachetMarket} from "../src/SachetMarket.sol";
-import {MockERC20} from "./mocks/MockERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+contract MockToken is ERC20 {
+    constructor() ERC20("Mock Token", "MTK") {}
+    
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+}
+
+contract ReentrantMockToken is ERC20 {
+    SachetMarket public escrow;
+    
+    constructor() ERC20("Reentrant Mock Token", "RMTK") {}
+    
+    function setEscrow(SachetMarket _escrow) external {
+        escrow = _escrow;
+    }
+    
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+    
+    function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
+        bool result = super.transferFrom(sender, recipient, amount);
+        
+        // Try to re-enter
+        if (address(escrow) != address(0)) {
+            try escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, amount) {
+                // Should revert
+            } catch {
+                // Expected
+            }
+        }
+        
+        return result;
+    }
+}
 
 contract SachetMarketTest is Test {
-    SachetMarket internal market;
-    MockERC20 internal token;
+    SachetMarket public escrow;
+    MockToken public token;
 
-    address internal operator = address(0xA11CE);
-    address internal treasury = address(0xB0B);
-    address internal alice = address(0x1);
-    address internal bob = address(0x2);
-    address internal carol = address(0x3);
-    address internal dave = address(0x4);
-
-    // Mirror the contract's outcome codes as locals. Never call the contract's
-    // constant getters inside an `expectRevert`/`prank` window: those getters are
-    // external calls and would consume the cheatcode.
-    uint8 internal constant HOME = 1;
-    uint8 internal constant DRAW = 2;
-    uint8 internal constant AWAY = 3;
-    uint8 internal constant VOID = 4;
-    uint16 internal constant MAX_RAKE = 1000;
-
-    uint256 internal constant MIN_STAKE = 1e18;
-    uint16 internal constant RAKE = 500; // 5%
-
-    bytes32 internal constant POOL = keccak256("sachet:1x2:test");
-    uint64 internal expiry;
-
+    address public admin = address(1);
+    address public resolver = address(2);
+    address public alice = address(3);
+    address public bob = address(4);
+    address public charlie = address(5);
+    
     function setUp() public {
-        token = new MockERC20();
-        market = new SachetMarket(
-            address(token),
-            treasury,
-            operator,
-            MIN_STAKE
-        );
-        expiry = uint64(block.timestamp + 1 days);
-
-        address[4] memory users = [alice, bob, carol, dave];
-        for (uint256 i = 0; i < users.length; i++) {
-            token.mint(users[i], 10_000e18);
-            vm.prank(users[i]);
-            token.approve(address(market), type(uint256).max);
-        }
-    }
-
-    function _create() internal {
-        vm.prank(operator);
-        market.createPool(POOL, expiry, RAKE);
-    }
-
-    function _bet(address who, uint8 selection, uint256 amount) internal {
-        vm.prank(who);
-        market.bet(POOL, selection, amount);
-    }
-
-    // ── createPool ────────────────────────────────────────────────────────
-
-    function test_CreatePool_StoresConfig() public {
-        _create();
-        SachetMarket.Pool memory p = market.getPool(POOL);
-        assertTrue(p.exists);
-        assertEq(p.expiresAt, expiry);
-        assertEq(p.rakeBps, RAKE);
-        assertEq(p.outcome, 0);
-        assertFalse(p.resolved);
-    }
-
-    function test_CreatePool_RevertsForNonOperator() public {
-        vm.expectRevert(SachetMarket.NotOperator.selector);
+        token = new MockToken();
+        
+        vm.startPrank(admin);
+        escrow = new SachetMarket(address(token), admin);
+        escrow.grantRole(escrow.RESOLVER_ROLE(), resolver);
+        vm.stopPrank();
+        
+        token.mint(alice, 10000 ether);
+        token.mint(bob, 10000 ether);
+        token.mint(charlie, 10000 ether);
+        
         vm.prank(alice);
-        market.createPool(POOL, expiry, RAKE);
+        token.approve(address(escrow), type(uint256).max);
+        vm.prank(bob);
+        token.approve(address(escrow), type(uint256).max);
+        vm.prank(charlie);
+        token.approve(address(escrow), type(uint256).max);
     }
 
-    function test_CreatePool_RevertsOnDuplicate() public {
-        _create();
-        vm.expectRevert(SachetMarket.PoolExists.selector);
-        vm.prank(operator);
-        market.createPool(POOL, expiry, RAKE);
-    }
-
-    function test_CreatePool_RevertsOnPastExpiry() public {
-        vm.expectRevert(SachetMarket.ExpiryInPast.selector);
-        vm.prank(operator);
-        market.createPool(POOL, uint64(block.timestamp), RAKE);
-    }
-
-    function test_CreatePool_RevertsOnRakeTooHigh() public {
-        vm.expectRevert(SachetMarket.RakeTooHigh.selector);
-        vm.prank(operator);
-        market.createPool(POOL, expiry, MAX_RAKE + 1);
-    }
-
-    // ── bet ───────────────────────────────────────────────────────────────
-
-    function test_Bet_TransfersAndTracksStake() public {
-        _create();
-        uint256 before = token.balanceOf(alice);
-        _bet(alice, HOME, 200e18);
-
-        assertEq(token.balanceOf(alice), before - 200e18);
-        assertEq(token.balanceOf(address(market)), 200e18);
-
-        SachetMarket.Pool memory p = market.getPool(POOL);
-        assertEq(p.totalStake, 200e18);
-        assertEq(p.stakeBySelection[0], 200e18);
-
-        (uint256 home, uint256 draw, uint256 away) = market.getUserStake(
-            POOL,
-            alice
-        );
-        assertEq(home, 200e18);
-        assertEq(draw, 0);
-        assertEq(away, 0);
-    }
-
-    function test_Bet_AccumulatesMultipleBets() public {
-        _create();
-        _bet(alice, HOME, 150e18);
-        _bet(alice, HOME, 250e18);
-        (uint256 home, , ) = market.getUserStake(POOL, alice);
-        assertEq(home, 400e18);
-    }
-
-    function test_Bet_RevertsAfterExpiry() public {
-        _create();
-        vm.warp(expiry);
-        vm.expectRevert(SachetMarket.BettingClosed.selector);
+    // --- Access Control ---
+    
+    function test_LaunchRound_OnlyAdmin() public {
         vm.prank(alice);
-        market.bet(POOL, HOME, 200e18);
+        vm.expectRevert();
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        (uint64 expiresAt,,,,,,,) = escrow.pools(bytes32(0));
+        assertEq(expiresAt, uint64(block.timestamp + 1 days));
     }
 
-    function test_Bet_RevertsBelowMinStake() public {
-        _create();
-        vm.expectRevert(SachetMarket.StakeTooSmall.selector);
+    function test_ResolveRound_OnlyResolver() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.warp(block.timestamp + 2 days);
+        
+        // Admin cannot resolve
+        vm.prank(admin);
+        vm.expectRevert();
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME);
+        
+        // Alice cannot resolve
         vm.prank(alice);
-        market.bet(POOL, HOME, MIN_STAKE - 1);
+        vm.expectRevert();
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME);
+        
+        // Resolver can resolve
+        vm.prank(resolver);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME);
     }
 
-    function test_Bet_RevertsInvalidSelection() public {
-        _create();
-        vm.expectRevert(SachetMarket.InvalidSelection.selector);
+    // --- Pool Lifecycle ---
+
+    function test_CannotBetBeforeRoundExists() public {
         vm.prank(alice);
-        market.bet(POOL, 0, 200e18);
+        vm.expectRevert(SachetMarket.PoolDoesNotExist.selector);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+    }
 
-        vm.expectRevert(SachetMarket.InvalidSelection.selector);
+    function test_CannotBetAfterEndTime() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.warp(block.timestamp + 1 days + 1);
+        
         vm.prank(alice);
-        market.bet(POOL, 4, 200e18);
+        vm.expectRevert(SachetMarket.PoolClosed.selector);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
     }
 
-    function test_Bet_RevertsWhenPoolMissing() public {
-        vm.expectRevert(SachetMarket.PoolMissing.selector);
+    function test_CannotResolveBeforeEndTime() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.prank(resolver);
+        vm.expectRevert(SachetMarket.PoolStillOpen.selector);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME);
+    }
+
+    function test_CannotResolveTwice() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        vm.warp(block.timestamp + 2 days);
+        
+        vm.startPrank(resolver);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME);
+        
+        vm.expectRevert(SachetMarket.AlreadyResolvedOrCancelled.selector);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME);
+        vm.stopPrank();
+    }
+
+    // --- Betting ---
+
+    function test_BetRevertsOnAmountZero() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
         vm.prank(alice);
-        market.bet(POOL, HOME, 200e18);
+        vm.expectRevert(SachetMarket.AmountMustBeGreaterThan0.selector);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 0);
     }
 
-    // ── resolve ───────────────────────────────────────────────────────────
-
-    function test_Resolve_RevertsForNonOperator() public {
-        _create();
-        _bet(alice, HOME, 200e18);
-        vm.warp(expiry);
-        vm.expectRevert(SachetMarket.NotOperator.selector);
+    function test_BetRevertsOnUnsetOutcome() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
         vm.prank(alice);
-        market.resolve(POOL, HOME);
-    }
-
-    function test_Resolve_RevertsBeforeExpiry() public {
-        _create();
-        _bet(alice, HOME, 200e18);
-        vm.expectRevert(SachetMarket.PoolNotExpired.selector);
-        vm.prank(operator);
-        market.resolve(POOL, HOME);
-    }
-
-    function test_Resolve_RevertsDoubleResolve() public {
-        _create();
-        _bet(alice, HOME, 200e18);
-        vm.warp(expiry);
-        vm.prank(operator);
-        market.resolve(POOL, HOME);
-
-        vm.expectRevert(SachetMarket.AlreadyResolved.selector);
-        vm.prank(operator);
-        market.resolve(POOL, HOME);
-    }
-
-    function test_Resolve_RevertsInvalidOutcome() public {
-        _create();
-        _bet(alice, HOME, 200e18);
-        vm.warp(expiry);
         vm.expectRevert(SachetMarket.InvalidOutcome.selector);
-        vm.prank(operator);
-        market.resolve(POOL, 5);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.UNSET, 100);
     }
 
-    // ── claim ─────────────────────────────────────────────────────────────
-
-    function test_Claim_ProportionalSplit() public {
-        _create();
-        _bet(alice, HOME, 100e18);
-        _bet(bob, HOME, 50e18);
-        _bet(carol, AWAY, 30e18);
-        _bet(dave, DRAW, 20e18);
-
-        vm.warp(expiry);
-        vm.prank(operator);
-        market.resolve(POOL, HOME);
-
-        // total 200e18, rake floor(200e18*5%) = 10e18, distributable 190e18,
-        // winning stake 150e18.
-        uint256 distributable =
-            200e18 -
-            (200e18 * uint256(RAKE)) /
-            10_000;
-        uint256 alicePayout = (distributable * 100e18) / 150e18;
-        uint256 bobPayout = (distributable * 50e18) / 150e18;
-
+    function test_BetRevertsOnVoidOutcome() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
         vm.prank(alice);
-        market.claim(POOL);
-        assertEq(token.balanceOf(alice), 10_000e18 - 100e18 + alicePayout);
-
-        vm.prank(bob);
-        market.claim(POOL);
-        assertEq(token.balanceOf(bob), 10_000e18 - 50e18 + bobPayout);
-
-        assertEq(market.treasuryBalance(), 10e18);
-        // The pot keeps the rake plus whatever rounding dust the floors left.
-        uint256 dust = distributable - alicePayout - bobPayout;
-        assertEq(token.balanceOf(address(market)), 10e18 + dust);
+        vm.expectRevert(SachetMarket.InvalidOutcome.selector);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.VOID, 100);
     }
 
-    function test_Claim_RevertsDoubleClaim() public {
-        _create();
-        _bet(alice, HOME, 100e18);
-        _bet(bob, AWAY, 100e18);
-        vm.warp(expiry);
-        vm.prank(operator);
-        market.resolve(POOL, HOME);
 
+
+    function test_TokenTransferMatchesRecordedAmount() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
         vm.prank(alice);
-        market.claim(POOL);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        
+        (uint256 amount, , ) = escrow.bets(bytes32(0), alice);
+        assertEq(amount, 100);
+        assertEq(token.balanceOf(address(escrow)), 100);
+    }
 
+    // --- Withdrawal ---
+
+    function test_WithdrawSucceedsBeforeEndTime() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.prank(alice);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        
+        vm.prank(alice);
+        escrow.withdrawBet(bytes32(0));
+        
+        (uint256 amount, , ) = escrow.bets(bytes32(0), alice);
+        assertEq(amount, 0);
+
+        
+        (,,,,,,uint256 totalPool,) = escrow.pools(bytes32(0));
+        assertEq(totalPool, 0);
+        assertEq(token.balanceOf(address(escrow)), 0);
+    }
+
+    function test_WithdrawRevertsAfterEndTime() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.prank(alice);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        
+        vm.warp(block.timestamp + 2 days);
+        
+        vm.prank(alice);
+        vm.expectRevert(SachetMarket.TooLateToWithdraw.selector);
+        escrow.withdrawBet(bytes32(0));
+    }
+
+    function test_WithdrawRevertsIfAlreadyWithdrawn() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.startPrank(alice);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        escrow.withdrawBet(bytes32(0));
+        vm.expectRevert(SachetMarket.NoActiveBet.selector);
+        escrow.withdrawBet(bytes32(0));
+        vm.stopPrank();
+    }
+
+    function test_WithdrawCannotClaimLater() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.prank(alice);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        
+        vm.prank(alice);
+        escrow.withdrawBet(bytes32(0));
+        
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(resolver);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME);
+        
+        vm.prank(alice);
+        vm.expectRevert(SachetMarket.NoClaimableBet.selector);
+        escrow.claim(bytes32(0));
+    }
+
+    // --- Payout Math ---
+
+    function test_PayoutMath_3WaySplit() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        // WIN=100 (Alice), DRAW=50 (Bob), LOSE=50 (Charlie)
+        vm.prank(alice); escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        vm.prank(bob); escrow.placeBet(bytes32(0), SachetMarket.Outcome.DRAW, 50);
+        vm.prank(charlie); escrow.placeBet(bytes32(0), SachetMarket.Outcome.AWAY, 50);
+        
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(resolver);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME);
+        
+        uint256 aliceBalBefore = token.balanceOf(alice);
+        vm.prank(alice);
+        escrow.claim(bytes32(0));
+        uint256 aliceBalAfter = token.balanceOf(alice);
+        
+        // Alice bet 100. Winning pool = 100. Losing pool = 50 + 50 = 100.
+        // Payout = 100 + (100 * 100 / 100) = 200.
+        assertEq(aliceBalAfter - aliceBalBefore, 200);
+    }
+
+    function test_PayoutMath_ZeroLosingPool() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.prank(alice); escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        vm.prank(bob); escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 50);
+        
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(resolver);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME);
+        
+        uint256 aliceBalBefore = token.balanceOf(alice);
+        vm.prank(alice); escrow.claim(bytes32(0));
+        assertEq(token.balanceOf(alice) - aliceBalBefore, 100);
+        
+        uint256 bobBalBefore = token.balanceOf(bob);
+        vm.prank(bob); escrow.claim(bytes32(0));
+        assertEq(token.balanceOf(bob) - bobBalBefore, 50);
+    }
+
+    function test_PayoutMath_ZeroWinningPool() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.prank(bob); escrow.placeBet(bytes32(0), SachetMarket.Outcome.DRAW, 100);
+        vm.prank(charlie); escrow.placeBet(bytes32(0), SachetMarket.Outcome.AWAY, 50);
+        
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(resolver);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME); // Nobody bet WIN
+        
+        // Bob and Charlie should get 0 payout and claim without reverting
+        uint256 bobBalBefore = token.balanceOf(bob);
+        vm.prank(bob); escrow.claim(bytes32(0));
+        assertEq(token.balanceOf(bob), bobBalBefore);
+        
+        uint256 charlieBalBefore = token.balanceOf(charlie);
+        vm.prank(charlie); escrow.claim(bytes32(0));
+        assertEq(token.balanceOf(charlie), charlieBalBefore);
+    }
+
+    function test_PayoutMath_SingleBettorTotal() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.prank(alice); escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(resolver);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME);
+        
+        uint256 aliceBalBefore = token.balanceOf(alice);
+        vm.prank(alice); escrow.claim(bytes32(0));
+        assertEq(token.balanceOf(alice) - aliceBalBefore, 100);
+    }
+
+    function test_DoubleClaimReverts() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        vm.prank(alice); escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(resolver);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.HOME);
+        
+        vm.startPrank(alice);
+        escrow.claim(bytes32(0));
         vm.expectRevert(SachetMarket.AlreadyClaimed.selector);
-        vm.prank(alice);
-        market.claim(POOL);
+        escrow.claim(bytes32(0));
+        vm.stopPrank();
+    }
+    
+    function test_ClaimOnCancelledRound() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        vm.prank(alice); escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        vm.prank(bob); escrow.placeBet(bytes32(0), SachetMarket.Outcome.AWAY, 200);
+        
+        vm.prank(admin);
+        escrow.cancelPool(bytes32(0));
+        
+        uint256 aliceBalBefore = token.balanceOf(alice);
+        vm.prank(alice); escrow.claim(bytes32(0));
+        assertEq(token.balanceOf(alice) - aliceBalBefore, 100);
+        
+        uint256 bobBalBefore = token.balanceOf(bob);
+        vm.prank(bob); escrow.claim(bytes32(0));
+        assertEq(token.balanceOf(bob) - bobBalBefore, 200);
     }
 
-    function test_Claim_LoserRevertsNothingToClaim() public {
-        _create();
-        _bet(alice, HOME, 100e18);
-        _bet(bob, AWAY, 100e18);
-        vm.warp(expiry);
-        vm.prank(operator);
-        market.resolve(POOL, HOME);
+    function test_ClaimOnVoidRound() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        vm.prank(alice); escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        vm.prank(bob); escrow.placeBet(bytes32(0), SachetMarket.Outcome.AWAY, 200);
+        
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(resolver);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.VOID);
+        
+        uint256 aliceBalBefore = token.balanceOf(alice);
+        vm.prank(alice); escrow.claim(bytes32(0));
+        assertEq(token.balanceOf(alice) - aliceBalBefore, 100);
+        
+        uint256 bobBalBefore = token.balanceOf(bob);
+        vm.prank(bob); escrow.claim(bytes32(0));
+        assertEq(token.balanceOf(bob) - bobBalBefore, 200);
+    }
 
-        vm.expectRevert(SachetMarket.NothingToClaim.selector);
+    function test_IncreaseBetSameOutcome() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.startPrank(alice);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 200);
+        vm.stopPrank();
+
+        SachetMarket.Bet memory b = escrow.getUserStake(bytes32(0), alice);
+        assertEq(b.amount, 300);
+        assertEq(uint(b.outcome), uint(SachetMarket.Outcome.HOME));
+        
+        SachetMarket.Pool memory p = escrow.getPool(bytes32(0));
+        assertEq(p.poolHome, 300);
+        assertEq(p.totalPool, 300);
+    }
+
+    function test_CannotChangeOutcomeWithoutWithdraw() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.startPrank(alice);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        
+        vm.expectRevert(SachetMarket.CannotChangeOutcome.selector);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.AWAY, 100);
+        vm.stopPrank();
+    }
+
+    function test_CanBetAgainWithDifferentOutcomeAfterWithdraw() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.startPrank(alice);
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        escrow.withdrawBet(bytes32(0));
+        
+        // Bet again on AWAY
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.AWAY, 200);
+        vm.stopPrank();
+        
+        SachetMarket.Bet memory b = escrow.getUserStake(bytes32(0), alice);
+        assertEq(b.amount, 200);
+        assertEq(uint(b.outcome), uint(SachetMarket.Outcome.AWAY));
+        
+        SachetMarket.Pool memory p = escrow.getPool(bytes32(0));
+        assertEq(p.poolHome, 0); // Withdrawn
+        assertEq(p.poolAway, 200);
+        assertEq(p.totalPool, 200);
+    }
+
+    // --- Fuzz Testing ---
+
+    function testFuzz_PayoutMath(uint128 amount1, uint128 amount2, uint128 amount3, uint8 outcomeChoice) public {
+        amount1 = uint128(bound(amount1, 1, 10000 ether));
+        amount2 = uint128(bound(amount2, 1, 10000 ether));
+        amount3 = uint128(bound(amount3, 1, 10000 ether));
+        
+        // Convert to Outcome
+        SachetMarket.Outcome result = SachetMarket.Outcome((outcomeChoice % 3) + 1);
+        
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.prank(alice); escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, amount1);
+        vm.prank(bob); escrow.placeBet(bytes32(0), SachetMarket.Outcome.DRAW, amount2);
+        vm.prank(charlie); escrow.placeBet(bytes32(0), SachetMarket.Outcome.AWAY, amount3);
+        
+        uint256 expectedTotalPool = uint256(amount1) + amount2 + amount3;
+        (,,,,,,uint256 totalPool,) = escrow.pools(bytes32(0));
+        assertEq(totalPool, expectedTotalPool);
+        
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(resolver);
+        escrow.resolvePool(bytes32(0), result);
+        
+        uint256 totalClaimed = 0;
+        
+        uint256 b1 = token.balanceOf(alice); vm.prank(alice); escrow.claim(bytes32(0)); totalClaimed += token.balanceOf(alice) - b1;
+        uint256 b2 = token.balanceOf(bob); vm.prank(bob); escrow.claim(bytes32(0)); totalClaimed += token.balanceOf(bob) - b2;
+        uint256 b3 = token.balanceOf(charlie); vm.prank(charlie); escrow.claim(bytes32(0)); totalClaimed += token.balanceOf(charlie) - b3;
+        
+        assertTrue(totalClaimed <= expectedTotalPool, "totalClaimed exceeds totalPool");
+        
+        // Assert losers got 0
+        if (result != SachetMarket.Outcome.HOME) assertEq(token.balanceOf(alice) - b1, 0);
+        if (result != SachetMarket.Outcome.DRAW) assertEq(token.balanceOf(bob) - b2, 0);
+        if (result != SachetMarket.Outcome.AWAY) assertEq(token.balanceOf(charlie) - b3, 0);
+    }
+
+    // --- Reentrancy ---
+
+    function test_ReentrancyBlocked() public {
+        ReentrantMockToken rToken = new ReentrantMockToken();
+        
+        vm.prank(admin);
+        SachetMarket rEscrow = new SachetMarket(address(rToken), admin);
+        rToken.setEscrow(rEscrow);
+        
+        rToken.mint(alice, 1000);
+        vm.prank(alice);
+        rToken.approve(address(rEscrow), type(uint256).max);
+        
+        vm.prank(admin);
+        rEscrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.prank(alice);
+        rEscrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        
+        (uint256 amt, , ) = rEscrow.bets(bytes32(0), alice);
+        assertEq(amt, 100); // Because inner call reverted, so only outer succeeded
+        assertEq(rToken.balanceOf(address(rEscrow)), 100);
+    }
+
+    // --- Pause ---
+
+    function test_PauseBlocksPlaceBetButNotWithdrawOrClaim() public {
+        vm.prank(admin);
+        escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
+        
+        vm.prank(alice); escrow.placeBet(bytes32(0), SachetMarket.Outcome.HOME, 100);
+        vm.prank(bob); escrow.placeBet(bytes32(0), SachetMarket.Outcome.AWAY, 200);
+        
+        vm.prank(admin);
+        escrow.pause();
+        
+        vm.prank(charlie);
+        vm.expectRevert();
+        escrow.placeBet(bytes32(0), SachetMarket.Outcome.DRAW, 100);
+        
+        // Withdraw should succeed
+        vm.prank(alice);
+        escrow.withdrawBet(bytes32(0));
+        
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(resolver);
+        escrow.resolvePool(bytes32(0), SachetMarket.Outcome.AWAY);
+        
+        // Claim should succeed
         vm.prank(bob);
-        market.claim(POOL);
+        escrow.claim(bytes32(0));
     }
 
-    function test_Claim_RevertsBeforeResolve() public {
-        _create();
-        _bet(alice, HOME, 100e18);
-        vm.expectRevert(SachetMarket.NotResolved.selector);
-        vm.prank(alice);
-        market.claim(POOL);
+    function test_UpdateToken_RevertsIfUnpaused() public {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSignature("ExpectedPause()"));
+        escrow.updateToken(address(42));
     }
 
-    function test_Claim_StrangerReverts() public {
-        _create();
-        _bet(alice, HOME, 100e18);
-        vm.warp(expiry);
-        vm.prank(operator);
-        market.resolve(POOL, HOME);
-
-        address stranger = address(0x99);
-        vm.expectRevert(SachetMarket.NothingToClaim.selector);
-        vm.prank(stranger);
-        market.claim(POOL);
+    function test_UpdateToken_SuccessWhenPaused() public {
+        vm.prank(admin);
+        escrow.pause();
+        
+        vm.prank(admin);
+        escrow.updateToken(address(42));
+        assertEq(address(escrow.sachetMarketToken()), address(42));
     }
 
-    // ── refunds ───────────────────────────────────────────────────────────
-
-    function test_Void_RefundsEveryoneNoRake() public {
-        _create();
-        _bet(alice, HOME, 100e18);
-        _bet(bob, AWAY, 50e18);
-        vm.warp(expiry);
-        vm.prank(operator);
-        market.resolve(POOL, VOID);
-
-        vm.prank(alice);
-        market.claim(POOL);
-        assertEq(token.balanceOf(alice), 10_000e18);
-        vm.prank(bob);
-        market.claim(POOL);
-        assertEq(token.balanceOf(bob), 10_000e18);
-        assertEq(market.treasuryBalance(), 0);
-    }
-
-    function test_NoWinners_RefundsEveryoneNoRake() public {
-        _create();
-        _bet(alice, HOME, 100e18);
-        _bet(bob, DRAW, 50e18);
-        vm.warp(expiry);
-        // AWAY wins but nobody backed it.
-        vm.prank(operator);
-        market.resolve(POOL, AWAY);
-
-        SachetMarket.Pool memory p = market.getPool(POOL);
-        assertTrue(p.refundMode);
-        assertEq(p.treasuryCredit, 0);
-
-        vm.prank(alice);
-        market.claim(POOL);
-        assertEq(token.balanceOf(alice), 10_000e18);
-    }
-
-    // ── treasury ──────────────────────────────────────────────────────────
-
-    function test_WithdrawTreasury_OnlyOperator() public {
-        _create();
-        _bet(alice, HOME, 100e18);
-        _bet(bob, AWAY, 100e18);
-        vm.warp(expiry);
-        vm.prank(operator);
-        market.resolve(POOL, HOME);
-
-        vm.expectRevert(SachetMarket.NotOperator.selector);
-        vm.prank(alice);
-        market.withdrawTreasury(treasury);
-
-        vm.prank(operator);
-        market.withdrawTreasury(treasury);
-        assertEq(token.balanceOf(treasury), 10e18);
-        assertEq(market.treasuryBalance(), 0);
-    }
-
-    // ── fuzz ──────────────────────────────────────────────────────────────
-
-    /// @dev Across any split, a winning bettor can never pull out more than the
-    ///      distributable pot — dust stays in the contract.
-    function testFuzz_ClaimSumNeverExceedsDistributable(
-        uint96 homeAmt,
-        uint96 drawAmt,
-        uint96 awayAmt,
-        uint16 rakeBps
-    ) public {
-        uint256 h = bound(uint256(homeAmt), MIN_STAKE, 1_000_000e18);
-        uint256 d = bound(uint256(drawAmt), MIN_STAKE, 1_000_000e18);
-        uint256 a = bound(uint256(awayAmt), MIN_STAKE, 1_000_000e18);
-        uint16 rake = uint16(bound(uint256(rakeBps), 0, MAX_RAKE));
-
-        address p1 = address(0x101);
-        address p2 = address(0x102);
-        address p3 = address(0x103);
-        token.mint(p1, h);
-        token.mint(p2, d);
-        token.mint(p3, a);
-        vm.prank(p1);
-        token.approve(address(market), type(uint256).max);
-        vm.prank(p2);
-        token.approve(address(market), type(uint256).max);
-        vm.prank(p3);
-        token.approve(address(market), type(uint256).max);
-
-        bytes32 pid = bytes32("fuzz");
-        vm.prank(operator);
-        market.createPool(pid, uint64(block.timestamp + 1 hours), rake);
-
-        vm.prank(p1);
-        market.bet(pid, HOME, h);
-        vm.prank(p2);
-        market.bet(pid, DRAW, d);
-        vm.prank(p3);
-        market.bet(pid, AWAY, a);
-
-        vm.warp(block.timestamp + 1 hours);
-        vm.prank(operator);
-        market.resolve(pid, HOME);
-
-        uint256 total = h + d + a;
-        uint256 rakeAmt = (total * rake) / market.BPS_DENOMINATOR();
-        uint256 distributable = total - rakeAmt;
-
-        vm.prank(p1);
-        market.claim(pid);
-
-        // p1 staked `h` (leaving balance 0), so its balance is now the payout.
-        uint256 paid = token.balanceOf(p1);
-        assertLe(paid, distributable);
-        assertLe(market.treasuryBalance(), rakeAmt);
-        // Contract retains the rake plus any rounding dust.
-        assertGe(token.balanceOf(address(market)), rakeAmt);
-    }
-
-    /// @dev A refund (void, or a result nobody backed) returns the exact stake.
-    function testFuzz_RefundAlwaysReturnsExactStake(
-        uint96 amount,
-        uint8 outcome
-    ) public {
-        uint256 amt = bound(uint256(amount), MIN_STAKE, 1_000e18);
-        uint8 out = uint8(bound(uint256(outcome), 1, 4));
-
-        _create();
-        _bet(alice, HOME, amt);
-        vm.warp(expiry);
-        vm.prank(operator);
-        market.resolve(POOL, out);
-
-        vm.prank(alice);
-        market.claim(POOL);
-
-        // Alice staked `amt` on HOME and started with 10,000e18. She is refunded
-        // in full when the outcome is VOID or nobody backed it; when HOME wins
-        // she takes the whole pot back minus the rake.
-        if (out == HOME) {
-            uint256 rakeAmt = (amt * RAKE) / market.BPS_DENOMINATOR();
-            assertEq(token.balanceOf(alice), 10_000e18 - rakeAmt);
-        } else {
-            assertEq(token.balanceOf(alice), 10_000e18);
-        }
+    function test_WithdrawTreasury_Success() public {
+        // Mint some tokens directly to contract
+        token.mint(address(escrow), 1000);
+        
+        uint256 adminBalBefore = token.balanceOf(admin);
+        
+        vm.startPrank(admin);
+        escrow.pause();
+        escrow.withdrawTreasury(address(token), admin, 400);
+        vm.stopPrank();
+        
+        assertEq(token.balanceOf(admin) - adminBalBefore, 400);
+        assertEq(token.balanceOf(address(escrow)), 600);
+        
+        // Test withdraw max
+        vm.prank(admin);
+        escrow.withdrawTreasury(address(token), admin, type(uint256).max);
+        
+        assertEq(token.balanceOf(address(escrow)), 0);
+        assertEq(token.balanceOf(admin) - adminBalBefore, 1000);
     }
 }
