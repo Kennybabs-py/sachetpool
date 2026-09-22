@@ -241,11 +241,11 @@ After deploy, set `MARKET_ADDRESS` and `MARKET_DEPLOY_BLOCK` (server + matching
 
 | Step       | Off-chain code                                                                        | Contract call                            |
 | ---------- | ------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Open pool  | `app/(app)/admin/actions.ts::openPoolAction` → `lib/market.ts::operatorCreatePool`    | `createPool(poolId, expiresAt, rakeBps)` |
-| Place bet  | `components/pools/bet-sheet.tsx` (browser wallet)                                     | `bet(poolId, selection, amount)`         |
-| Resolve    | `lib/football-sync.ts::settleFinishedMatches` or admin action → `operatorResolvePool` | `resolve(poolId, outcome)`               |
+| Open pool  | `app/(app)/admin/actions.ts::openPoolAction` → `lib/market.ts::launchPool`    | `launchPool(poolId, expiresAt)` |
+| Place bet  | `components/pools/bet-sheet.tsx` (browser wallet)                                     | `placeBet(poolId, outcome, amount)`         |
+| Resolve    | `lib/football-sync.ts::settleFinishedMatches` or admin action → `resolvePool` | `resolvePool(poolId, outcome)`               |
 | Claim      | `components/wallet/claim-button.tsx` (browser wallet)                                 | `claim(poolId)`                          |
-| Sweep rake | `lib/market.ts::operatorWithdrawTreasury`                                             | `withdrawTreasury(to)`                   |
+| Sweep treasury | `lib/market.ts::withdrawTreasury`                                             | `withdrawTreasury(token, to, amount)`                   |
 | Mirror     | `lib/indexer.ts::runIndexer` via `/api/cron/index`                                    | `getLogs` + `parseEventLogs`             |
 
 Amounts are always `bigint` base units on chain and stringified strings across
