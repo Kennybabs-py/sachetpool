@@ -2,10 +2,11 @@
 
 Engineer's guide to `SachetMarket` — the on-chain pari-mutuel engine behind
 Sachet Market. It covers the interface, the payout math, the security model, how
-to build/test/deploy, and exactly what is implemented today versus what remains.
+to build/test/deploy, and exactly what is implemented today and the current protocol capabilities.
+
 
 - **Source:** `contracts/src/SachetMarket.sol`
-- **Tests:** `contracts/test/SachetMarket.t.sol` (25 passing) + `contracts/test/mocks/MockERC20.sol`
+- **Tests:** `contracts/test/SachetMarket.t.sol` (30 passing)
 - **Config:** `contracts/foundry.toml`
 - **Off-chain mirror:** `lib/odds.ts`, `lib/onchain.ts`, `lib/market.ts`, `lib/indexer.ts`
 
