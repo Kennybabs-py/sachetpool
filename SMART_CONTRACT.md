@@ -144,30 +144,18 @@ the same value to `launchPool`. `launchPool` also rejects a reused id
 
 All arithmetic is integer with floor division; amounts are token base units.
 
-```
-rake            = floor(totalStake * rakeBps / 10000)        // on resolve, only if there is a winner
-distributable   = totalStake - rake
-payout(user)    = floor(distributable * userStakeOnWinner / winningStake)
-refund(user)    = userStake[home] + userStake[draw] + userStake[away]   // refundMode
-```
-
-Rules:
-
-- **`VOID`** outcome → `refundMode = true`, `treasuryCredit = 0`, everyone gets
-  their exact stake back, no rake.
-- **Winning selection with zero stake** → also `refundMode = true`, no rake.
-  Nobody backed the winner, so refunding is the only fair outcome.
-- **Normal resolution** → `treasuryCredit = floor(totalStake * rakeBps / 10000)`
-  added to `treasuryBalance` at resolve time.
-- Claim is **once per pool per address** and pays from the already-reserved
-  `treasuryCredit`, so claimed sums can never exceed `distributable`
-  (fuzz-tested).
-- Rounding **dust stays in the contract**; `paidOut` and `treasuryBalance` track
-  what leaves.
+- **Distributing Winnings**: 
+  - `winningPool` is the total tokens wagered on the correct outcome.
+  - `losingPool` is `totalPool - winningPool`.
+  - Payout is calculated as: `payout = originalAmount + (originalAmount * losingPool) / winningPool`.
+- **Refunds (`VOID` or `CANCELLED`)**:
+  - Payout is exactly 100% of the original wager.
+- **Zero Winner Edge Case**:
+  - If no one backed the winning outcome, everyone loses their wager (stays trapped in the contract to be swept via `withdrawTreasury`).
 
 Off-chain parity lives in `lib/odds.ts`:
 
-- `rakeAmount`, `distributablePot`, `winnerPayout` — identical integer math.
+- `distributablePot`, `winnerPayout` — identical integer math (now without rake).
 - `projectPayout` — what a bet would return if the pool closed now.
 - `impliedMultiple` — display-only multiple for the board.
 
