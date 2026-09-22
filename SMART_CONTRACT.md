@@ -258,11 +258,10 @@ the RSC boundary.
 ### Done
 
 - Full `SachetMarket` implementation: pool lifecycle, escrow, proportional
-  claims, void/no-winner refunds, rake accrual + sweep, operator rotation,
-  configurable `minStake`.
-- **25/25 Foundry tests passing**, including payout distribution, double-claim
+  claims, void/no-winner refunds, admin sweeps, token updates, access control (`AccessControl`), pausable capabilities.
+- **30/30 Foundry tests passing**, including payout distribution, double-claim
   and double-resolve guards, void and no-winner refunds, treasury access
-  control, and two fuzz invariants (256 runs each).
+  control, and fuzz invariants (256 runs each).
 - Off-chain parity suite (`lib/odds.test.ts`) and pool-id derivation
   (`lib/onchain.ts`).
 - ABI committed as `lib/contracts/sachet-market.ts` via `yarn export:abi`; viem
