@@ -25,107 +25,103 @@ Design goals:
   is only a mirror.
 - **Deterministic pool ids.** One pool per match, derived off-chain so both
   sides agree without a registry.
-- **Tiny trusted surface.** The operator can only open pools, resolve them, and
-  sweep accrued rake. It can never touch user stakes directly.
+- **Tiny trusted surface.** Admins launch pools, Resolvers finalize outcomes. They
+  can never touch user stakes directly.
 - **Exact off-chain parity.** `lib/odds.ts` reproduces the payout math and is
   unit-tested against the same numbers (see `lib/odds.test.ts`).
+- **Flexible Token and Treasury.** The betting token can be dynamically updated by an admin (when the market is paused), and generic tokens can be withdrawn via `withdrawTreasury`.
+- **No Rake.** Currently, 100% of the losing pool is distributed proportionally to the winners.
 
 ---
 
 ## 2. Interface
 
-Solidity `^0.8.24`, inherits OpenZeppelin `ReentrancyGuard`, uses `SafeERC20`.
+Solidity `^0.8.24`, inherits OpenZeppelin `AccessControl`, `ReentrancyGuard`, and `Pausable`. Uses `SafeERC20`.
 
-### Constants
+### Constants & Roles
 
-| Name                 | Type     | Value   | Meaning                  |
-| -------------------- | -------- | ------- | ------------------------ |
-| `OUTCOME_UNRESOLVED` | `uint8`  | `0`     | No result yet.           |
-| `HOME`               | `uint8`  | `1`     | Home win.                |
-| `DRAW`               | `uint8`  | `2`     | Draw.                    |
-| `AWAY`               | `uint8`  | `3`     | Away win.                |
-| `VOID`               | `uint8`  | `4`     | Cancelled → full refund. |
-| `MAX_RAKE_BPS`       | `uint16` | `1000`  | Rake cap (10%).          |
-| `BPS_DENOMINATOR`    | `uint16` | `10000` | Basis-point denominator. |
+| Name                 | Meaning                                           |
+| -------------------- | ------------------------------------------------- |
+| `ADMIN_ROLE`         | Can pause, update token, launch/cancel pools, and sweep treasury. |
+| `RESOLVER_ROLE`      | Can resolve pools with the final outcome.         |
+| `MAX_POOL_DURATION`  | Hardcoded to 30 days.                             |
 
-Selections accepted by `bet` are `1..3` only; `4` (VOID) is resolution-only.
+### Enums
+
+**Outcome**: `UNSET` (0), `HOME` (1), `DRAW` (2), `AWAY` (3), `VOID` (4)
+**PoolStatus**: `OPEN` (0), `LOCKED` (1), `RESOLVED` (2), `CANCELLED` (3)
 
 ### Immutables / storage
 
 ```solidity
-IERC20  public immutable token;      // $SACH that is escrowed
-address public immutable treasury;   // nominal rake recipient (constructor arg)
-address public operator;             // server hot key; can be rotated
-uint256 public minStake;             // minimum bet, token base units
-uint256 public treasuryBalance;      // accrued rake awaiting withdrawal
-mapping(bytes32 => Pool) private pools;
-mapping(bytes32 => mapping(address => uint256[3])) private userStake;
-mapping(bytes32 => mapping(address => bool)) public claimed;
+IERC20 public sachetMarketToken; // The active ERC20 token for wagering
+mapping(bytes32 => Pool) public pools;
+mapping(bytes32 => mapping(address => Bet)) public bets;
 ```
 
 ### `struct Pool`
 
 ```solidity
 struct Pool {
-    uint64  expiresAt;        // betting closes at this timestamp
-    uint16  rakeBps;          // rake for this pool (<= MAX_RAKE_BPS)
-    uint8   outcome;          // 0 unresolved, 1/2/3, 4 void
-    bool    exists;
-    bool    resolved;
-    bool    refundMode;       // true => everyone refunded, no rake
-    uint256 totalStake;
-    uint256[3] stakeBySelection; // [home, draw, away]
-    uint256 winningStake;
-    uint256 paidOut;
-    uint256 treasuryCredit;   // rake credited for this pool
+    uint64 expiresAt;
+    PoolStatus status;
+    Outcome result;
+    uint256 poolHome;
+    uint256 poolDraw;
+    uint256 poolAway;
+    uint256 totalPool;
+    uint256 totalClaimed; // Tracked for UI and analytics
 }
 ```
 
-### Constructor
+### `struct Bet`
 
 ```solidity
-constructor(address token_, address treasury_, address operator_, uint256 minStake_)
+struct Bet {
+    uint256 amount;
+    Outcome outcome;
+    bool claimed;
+}
 ```
 
-Reverts on any zero address: `token_`, `treasury_`, `operator_`.
+### Core Functions
 
-### Functions
-
-| Function                                                       | Access         | Notes                                                                                                                                                                                         |
-| -------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createPool(bytes32 poolId, uint64 expiresAt, uint16 rakeBps)` | `onlyOperator` | Reverts `PoolExists`, `ExpiryInPast` (`expiresAt <= block.timestamp`), `RakeTooHigh` (`> 1000`).                                                                                              |
-| `bet(bytes32 poolId, uint8 selection, uint256 amount)`         | anyone         | `nonReentrant`. Pulls `amount` via `transferFrom`. Reverts `PoolMissing`, `AlreadyResolved`, `BettingClosed` (at/after expiry), `InvalidSelection` (not 1–3), `StakeTooSmall` (`< minStake`). |
-| `resolve(bytes32 poolId, uint8 outcome)`                       | `onlyOperator` | Reverts `PoolMissing`, `AlreadyResolved`, `PoolNotExpired` (before expiry), `InvalidOutcome` (not 1–4). Sets `refundMode` for `VOID` **or** when `winningStake == 0`.                         |
-| `claim(bytes32 poolId)`                                        | anyone         | `nonReentrant`. Reverts `PoolMissing`, `NotResolved`, `AlreadyClaimed`, `NothingToClaim`. Pays refund (sum of all three stakes) or proportional win.                                          |
-| `setOperator(address)`                                         | `onlyOperator` | Zero-address guarded; emits `OperatorChanged`.                                                                                                                                                |
-| `setMinStake(uint256)`                                         | `onlyOperator` | Emits `MinStakeChanged`.                                                                                                                                                                      |
-| `withdrawTreasury(address to)`                                 | `onlyOperator` | Zero-address guarded; sweeps `treasuryBalance` to `to`.                                                                                                                                       |
-| `getPool(bytes32) → Pool`                                      | view           | Full pool struct.                                                                                                                                                                             |
-| `getUserStake(bytes32, address) → (uint256,uint256,uint256)`   | view           | Per-selection stake for a user.                                                                                                                                                               |
-| `claimed(bytes32, address) → bool`                             | view           | Public mapping.                                                                                                                                                                               |
+| Function                                                                 | Access         | Notes                                                                                                                                                             |
+| ------------------------------------------------------------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `launchPool(bytes32 poolId, uint64 expiresAt)`                           | `ADMIN_ROLE`   | Creates a pool. Reverts if expiry is in past or > 30 days.                                                                                                        |
+| `placeBet(bytes32 poolId, Outcome outcome, uint256 amount)`              | anyone         | Places or increases a bet. Reverts if paused or expired. `amount` must be > 0. Reverts if attempting to change outcome without withdrawing first.                 |
+| `withdrawBet(bytes32 poolId)`                                            | anyone         | Withdraws a user's bet before pool expiry, zeroing out their wager.                                                                                               |
+| `resolvePool(bytes32 poolId, Outcome result)`                            | `RESOLVER_ROLE`| Finalizes a pool's result. Must be at or after `expiresAt`.                                                                                                       |
+| `cancelPool(bytes32 poolId)`                                             | `ADMIN_ROLE`   | Emergency cancels an open pool, forcing a 100% refund.                                                                                                            |
+| `claim(bytes32 poolId)`                                                  | anyone         | Pulls payout for a winning bet, or refund if pool is `CANCELLED` or `VOID`.                                                                                       |
+| `updateToken(address newToken)`                                          | `ADMIN_ROLE`   | Dynamically changes the active betting token. Must be paused.                                                                                                     |
+| `withdrawTreasury(address token, address to, uint256 amount)`            | `ADMIN_ROLE`   | Sweeps any ERC20 out of the contract. Must be paused. Passing `type(uint256).max` sweeps full balance.                                                            |
 
 ### Events
 
 ```solidity
-event PoolCreated(bytes32 indexed poolId, uint64 expiresAt, uint16 rakeBps);
-event BetPlaced(bytes32 indexed poolId, address indexed bettor, uint8 selection, uint256 amount);
-event PoolResolved(bytes32 indexed poolId, uint8 outcome, bool refundMode, uint256 winningStake, uint256 treasuryCredit);
-event Claimed(bytes32 indexed poolId, address indexed bettor, uint256 amount);
-event TreasuryWithdrawn(address indexed to, uint256 amount);
-event OperatorChanged(address indexed operator);
-event MinStakeChanged(uint256 minStake);
+event PoolLaunched(bytes32 indexed poolId, uint64 expiresAt);
+event BetPlaced(bytes32 indexed poolId, address indexed user, Outcome outcome, uint256 amount);
+event BetWithdrawn(bytes32 indexed poolId, address indexed user, uint256 amount);
+event PoolResolved(bytes32 indexed poolId, Outcome result);
+event PoolCancelled(bytes32 indexed poolId);
+event Claimed(bytes32 indexed poolId, address indexed user, uint256 payout);
+event TokenUpdated(address indexed oldToken, address indexed newToken);
+event TreasuryWithdrawn(address indexed token, address indexed to, uint256 amount);
 ```
 
-These are the exact events the indexer decodes (`lib/indexer.ts`). `PoolCreated`,
-`BetPlaced`, `PoolResolved`, `Claimed` drive state; the other three are recorded
+These are the exact events the indexer decodes (`lib/indexer.ts`). `PoolLaunched`,
+`BetPlaced`, `BetWithdrawn`, `PoolResolved`, `PoolCancelled`, `Claimed` drive state; the other two are recorded
 for audit only.
 
 ### Errors
 
-`NotOperator`, `PoolExists`, `PoolMissing`, `AlreadyResolved`, `NotResolved`,
-`BettingClosed`, `PoolNotExpired`, `InvalidSelection`, `InvalidOutcome`,
-`RakeTooHigh`, `ExpiryInPast`, `StakeTooSmall`, `AlreadyClaimed`,
-`NothingToClaim`. (Constructor/zero-address checks use `require` strings.)
+`AlreadyClaimed`, `AlreadyResolvedOrCancelled`, `AmountMustBeGreaterThan0`,
+`ExpiresatExceedsMaxDuration`, `ExpiresatInPast`, `InvalidOutcome`,
+`InvalidResult`, `NoActiveBet`, `NoClaimableBet`, `NotResolvedOrCancelled`,
+`PoolAlreadyExists`, `PoolClosed`, `PoolDoesNotExist`, `PoolNotOpen`,
+`PoolStillOpen`, `ReceivedAmountMustBeGreaterThan0`, `TooLateToWithdraw`,
+`ZeroAddress`, `AmountExceedsBalance`, `CannotChangeOutcome`.
 
 ---
 
