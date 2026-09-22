@@ -14,9 +14,9 @@ to build/test/deploy, and exactly what is implemented today and the current prot
 
 ## 1. What the contract is
 
-A single deployed contract escrows all `$SACH` stakes for every match. The
-operator (a server-held key) opens and resolves pools; bettors stake and later
-**pull** their payout. There is no order book, no oracle, no per-match
+A single deployed contract escrows all stakes for every match. The
+admins open pools, resolvers provide final outcomes, and bettors stake and later
+**pull** their payout or refund. There is no order book, no oracle, no per-match
 contract — one singleton, many logical pools keyed by `bytes32`.
 
 Design goals:
