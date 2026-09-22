@@ -276,10 +276,8 @@ the RSC boundary.
   Chain env/keys.
 - **No upgrade path.** The contract is immutable; a bug requires a new deploy
   and event replay into the mirror.
-- **No protocol-level pause or emergency drain.** There is no way to halt
-  betting or rescue stuck funds beyond `withdrawTreasury` for rake.
 - **Dust is not swept.** Rounding remainder stays in the contract by design.
-- **Indexer integration test** (anvil + Postgres) is not in the suite; indexer
+- **Indexer integration test** (anvil + Postgres) is not fully coupled yet; indexer
   correctness is only unit/fuzz-adjacent so far.
 
 If you change the payout math, update `lib/odds.ts` **and**
