@@ -10,22 +10,17 @@ export const sachetMarketAbi = [
     "type": "constructor",
     "inputs": [
       {
-        "name": "token_",
+        "name": "_sachetMarketToken",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "treasury_",
+        "name": "_adminMultisig",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "operator_",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "minStake_",
+        "name": "_rakeBps",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -34,113 +29,98 @@ export const sachetMarketAbi = [
   },
   {
     "type": "function",
-    "name": "AWAY",
+    "name": "ADMIN_ROLE",
     "inputs": [],
     "outputs": [
       {
         "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "DEFAULT_ADMIN_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_POOL_DURATION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "RESOLVER_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "bets",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "outcome",
         "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "BPS_DENOMINATOR",
-    "inputs": [],
-    "outputs": [
+        "internalType": "enum SachetMarket.Outcome"
+      },
       {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
+        "name": "claimed",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "DRAW",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "HOME",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_RAKE_BPS",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "OUTCOME_UNRESOLVED",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "VOID",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "bet",
+    "name": "cancelPool",
     "inputs": [
       {
         "name": "poolId",
         "type": "bytes32",
         "internalType": "bytes32"
-      },
-      {
-        "name": "selection",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -154,53 +134,6 @@ export const sachetMarketAbi = [
         "name": "poolId",
         "type": "bytes32",
         "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "claimed",
-    "inputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "createPool",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expiresAt",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "rakeBps",
-        "type": "uint16",
-        "internalType": "uint16"
       }
     ],
     "outputs": [],
@@ -228,56 +161,60 @@ export const sachetMarketAbi = [
             "internalType": "uint64"
           },
           {
-            "name": "rakeBps",
-            "type": "uint16",
-            "internalType": "uint16"
-          },
-          {
-            "name": "outcome",
+            "name": "status",
             "type": "uint8",
-            "internalType": "uint8"
+            "internalType": "enum SachetMarket.PoolStatus"
           },
           {
-            "name": "exists",
-            "type": "bool",
-            "internalType": "bool"
+            "name": "result",
+            "type": "uint8",
+            "internalType": "enum SachetMarket.Outcome"
           },
           {
-            "name": "resolved",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "refundMode",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "totalStake",
+            "name": "poolHome",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "stakeBySelection",
-            "type": "uint256[3]",
-            "internalType": "uint256[3]"
-          },
-          {
-            "name": "winningStake",
+            "name": "poolDraw",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "paidOut",
+            "name": "poolAway",
             "type": "uint256",
             "internalType": "uint256"
           },
           {
-            "name": "treasuryCredit",
+            "name": "totalPool",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "totalClaimed",
             "type": "uint256",
             "internalType": "uint256"
           }
         ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getRoleAdmin",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -299,52 +236,113 @@ export const sachetMarketAbi = [
     ],
     "outputs": [
       {
-        "name": "home",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "draw",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "away",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct SachetMarket.Bet",
+        "components": [
+          {
+            "name": "amount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "outcome",
+            "type": "uint8",
+            "internalType": "enum SachetMarket.Outcome"
+          },
+          {
+            "name": "claimed",
+            "type": "bool",
+            "internalType": "bool"
+          }
+        ]
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "minStake",
-    "inputs": [],
-    "outputs": [
+    "name": "grantRole",
+    "inputs": [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "operator",
-    "inputs": [],
-    "outputs": [
+        "name": "role",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
       {
-        "name": "",
+        "name": "account",
         "type": "address",
         "internalType": "address"
       }
     ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "hasRole",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "resolve",
+    "name": "launchPool",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "expiresAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "pause",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "paused",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "placeBet",
     "inputs": [
       {
         "name": "poolId",
@@ -354,18 +352,10 @@ export const sachetMarketAbi = [
       {
         "name": "outcome",
         "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setMinStake",
-    "inputs": [
+        "internalType": "enum SachetMarket.Outcome"
+      },
       {
-        "name": "newMinStake",
+        "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -375,10 +365,82 @@ export const sachetMarketAbi = [
   },
   {
     "type": "function",
-    "name": "setOperator",
+    "name": "pools",
     "inputs": [
       {
-        "name": "newOperator",
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "expiresAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "status",
+        "type": "uint8",
+        "internalType": "enum SachetMarket.PoolStatus"
+      },
+      {
+        "name": "result",
+        "type": "uint8",
+        "internalType": "enum SachetMarket.Outcome"
+      },
+      {
+        "name": "poolHome",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "poolDraw",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "poolAway",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalPool",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalClaimed",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "rakeBps",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "renounceRole",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "callerConfirmation",
         "type": "address",
         "internalType": "address"
       }
@@ -388,7 +450,43 @@ export const sachetMarketAbi = [
   },
   {
     "type": "function",
-    "name": "token",
+    "name": "resolvePool",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "result",
+        "type": "uint8",
+        "internalType": "enum SachetMarket.Outcome"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "revokeRole",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "sachetMarketToken",
     "inputs": [],
     "outputs": [
       {
@@ -401,38 +499,87 @@ export const sachetMarketAbi = [
   },
   {
     "type": "function",
-    "name": "treasury",
-    "inputs": [],
+    "name": "setRakeBps",
+    "inputs": [
+      {
+        "name": "newRake",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "supportsInterface",
+    "inputs": [
+      {
+        "name": "interfaceId",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
     "outputs": [
       {
         "name": "",
-        "type": "address",
-        "internalType": "address"
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "treasuryBalance",
+    "name": "unpause",
     "inputs": [],
-    "outputs": [
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "updateToken",
+    "inputs": [
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "newToken",
+        "type": "address",
+        "internalType": "address"
       }
     ],
-    "stateMutability": "view"
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "withdrawBet",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
     "name": "withdrawTreasury",
     "inputs": [
       {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "to",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -449,16 +596,41 @@ export const sachetMarketAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "bettor",
+        "name": "user",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "selection",
+        "name": "outcome",
         "type": "uint8",
         "indexed": false,
-        "internalType": "uint8"
+        "internalType": "enum SachetMarket.Outcome"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "BetWithdrawn",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       },
       {
         "name": "amount",
@@ -480,13 +652,13 @@ export const sachetMarketAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "bettor",
+        "name": "user",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "amount",
+        "name": "payout",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -496,25 +668,12 @@ export const sachetMarketAbi = [
   },
   {
     "type": "event",
-    "name": "MinStakeChanged",
+    "name": "Paused",
     "inputs": [
       {
-        "name": "minStake",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "OperatorChanged",
-    "inputs": [
-      {
-        "name": "operator",
+        "name": "account",
         "type": "address",
-        "indexed": true,
+        "indexed": false,
         "internalType": "address"
       }
     ],
@@ -522,7 +681,20 @@ export const sachetMarketAbi = [
   },
   {
     "type": "event",
-    "name": "PoolCreated",
+    "name": "PoolCancelled",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PoolLaunched",
     "inputs": [
       {
         "name": "poolId",
@@ -535,12 +707,6 @@ export const sachetMarketAbi = [
         "type": "uint64",
         "indexed": false,
         "internalType": "uint64"
-      },
-      {
-        "name": "rakeBps",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
       }
     ],
     "anonymous": false
@@ -556,25 +722,26 @@ export const sachetMarketAbi = [
         "internalType": "bytes32"
       },
       {
-        "name": "outcome",
+        "name": "result",
         "type": "uint8",
         "indexed": false,
-        "internalType": "uint8"
-      },
+        "internalType": "enum SachetMarket.Outcome"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RakeUpdated",
+    "inputs": [
       {
-        "name": "refundMode",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
-      },
-      {
-        "name": "winningStake",
+        "name": "oldRake",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "treasuryCredit",
+        "name": "newRake",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -584,8 +751,108 @@ export const sachetMarketAbi = [
   },
   {
     "type": "event",
+    "name": "RoleAdminChanged",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "previousAdminRole",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "newAdminRole",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RoleGranted",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RoleRevoked",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "TokenUpdated",
+    "inputs": [
+      {
+        "name": "oldToken",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newToken",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "TreasuryWithdrawn",
     "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
       {
         "name": "to",
         "type": "address",
@@ -602,23 +869,82 @@ export const sachetMarketAbi = [
     "anonymous": false
   },
   {
+    "type": "event",
+    "name": "Unpaused",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AccessControlBadConfirmation",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AccessControlUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "neededRole",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
     "type": "error",
     "name": "AlreadyClaimed",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "AlreadyResolved",
+    "name": "AlreadyResolvedOrCancelled",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "BettingClosed",
+    "name": "AmountExceedsBalance",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "ExpiryInPast",
+    "name": "AmountMustBeGreaterThan0",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CannotChangeOutcome",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "EnforcedPause",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ExpectedPause",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ExpiresatExceedsMaxDuration",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ExpiresatInPast",
     "inputs": []
   },
   {
@@ -628,42 +954,57 @@ export const sachetMarketAbi = [
   },
   {
     "type": "error",
-    "name": "InvalidSelection",
+    "name": "InvalidRake",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "NotOperator",
+    "name": "InvalidResult",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "NotResolved",
+    "name": "NoActiveBet",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "NothingToClaim",
+    "name": "NoClaimableBet",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "PoolExists",
+    "name": "NotResolvedOrCancelled",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "PoolMissing",
+    "name": "PoolAlreadyExists",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "PoolNotExpired",
+    "name": "PoolClosed",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "RakeTooHigh",
+    "name": "PoolDoesNotExist",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PoolNotOpen",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PoolStillOpen",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ReceivedAmountMustBeGreaterThan0",
     "inputs": []
   },
   {
@@ -684,7 +1025,12 @@ export const sachetMarketAbi = [
   },
   {
     "type": "error",
-    "name": "StakeTooSmall",
+    "name": "TooLateToWithdraw",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroAddress",
     "inputs": []
   }
 ] as const;

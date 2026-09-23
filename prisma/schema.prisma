@@ -38,6 +38,7 @@ enum PoolStatus {
   LOCKED
   RESOLVED
   VOID
+  CANCELLED
 }
 
 enum Selection {
@@ -54,6 +55,7 @@ enum BetStatus {
   LOST
   VOID
   CLAIMED
+  WITHDRAWN
 }
 
 /// Wallet identity. The lowercase address is the primary identity everywhere.
@@ -96,7 +98,6 @@ model Pool {
   onchainPoolId    String      @unique
   type             PoolType    @default(RESULT_1X2)
   status           PoolStatus  @default(PENDING_ONCHAIN)
-  rakeBps          Int         @default(0)
   /// Selection expiry; betting is rejected on-chain from this instant.
   closesAt         DateTime
   createdBy        String?
