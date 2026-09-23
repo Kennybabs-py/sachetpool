@@ -122,7 +122,7 @@ export function BetSheet({
         BigInt(pool.totalStake),
         BigInt(pool.stakeBySelection[active]),
         amount,
-        5,
+        pool.rakeBps,
       )
     : 0n;
   const profit = payout > amount ? payout - amount : 0n;
