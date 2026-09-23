@@ -2,6 +2,23 @@ import "server-only";
 import { prisma } from "./prisma";
 import { PoolStatus, Selection } from "@/generated/prisma/client";
 import { impliedMultiple } from "./odds";
+import { publicClient } from "./chain/server-client";
+import { sachetMarketAbi } from "./contracts/sachet-market";
+import { MARKET_ADDRESS } from "@/config/chains";
+
+export async function getGlobalRakeBps(): Promise<number> {
+  if (!MARKET_ADDRESS) return 5;
+  try {
+    const rake = await publicClient.readContract({
+      address: MARKET_ADDRESS,
+      abi: sachetMarketAbi,
+      functionName: "rakeBps",
+    });
+    return Number(rake);
+  } catch (e) {
+    return 5;
+  }
+}
 
 /**
  * Server-side read layer for the board and pool detail.
@@ -54,7 +71,6 @@ type PoolRow = {
   matchId: string;
   onchainPoolId: string;
   status: PoolStatus;
-  rakeBps: number;
   closesAt: Date;
   totalStake: bigint;
   stakeHome: bigint;
@@ -75,7 +91,7 @@ type PoolRow = {
   };
 };
 
-function toView(pool: PoolRow, now: Date = new Date()): PoolView {
+function toView(pool: PoolRow, rakeBps: number, now: Date = new Date()): PoolView {
   const stakes: Record<Selection, bigint> = {
     HOME: pool.stakeHome,
     DRAW: pool.stakeDraw,
@@ -93,7 +109,7 @@ function toView(pool: PoolRow, now: Date = new Date()): PoolView {
     kickoffAt: pool.match.kickoffAt,
     closesAt: pool.closesAt,
     status: effectiveStatus(pool.status, pool.closesAt, now),
-    rakeBps: pool.rakeBps,
+    rakeBps,
     totalStake: pool.totalStake.toString(),
     stakeBySelection: {
       HOME: stakes.HOME.toString(),
@@ -101,9 +117,9 @@ function toView(pool: PoolRow, now: Date = new Date()): PoolView {
       AWAY: stakes.AWAY.toString(),
     },
     oddsBySelection: {
-      HOME: impliedMultiple(pool.totalStake, stakes.HOME, pool.rakeBps),
-      DRAW: impliedMultiple(pool.totalStake, stakes.DRAW, pool.rakeBps),
-      AWAY: impliedMultiple(pool.totalStake, stakes.AWAY, pool.rakeBps),
+      HOME: impliedMultiple(pool.totalStake, stakes.HOME, rakeBps),
+      DRAW: impliedMultiple(pool.totalStake, stakes.DRAW, rakeBps),
+      AWAY: impliedMultiple(pool.totalStake, stakes.AWAY, rakeBps),
     },
     winningSelection: pool.winningSelection,
     homeScore: pool.match.homeScore,
@@ -117,16 +133,19 @@ function toView(pool: PoolRow, now: Date = new Date()): PoolView {
 export async function listOpenPools(
   now: Date = new Date(),
 ): Promise<PoolView[]> {
-  const pools = await prisma.pool.findMany({
-    where: {
-      status: { in: [PoolStatus.OPEN, PoolStatus.LOCKED] },
-      closesAt: { gt: now },
-    },
-    orderBy: { closesAt: "asc" },
-    include: { match: true },
-    take: 100,
-  });
-  return pools.map((p) => toView(p, now));
+  const [pools, rakeBps] = await Promise.all([
+    prisma.pool.findMany({
+      where: {
+        status: { in: [PoolStatus.OPEN, PoolStatus.LOCKED] },
+        closesAt: { gt: now },
+      },
+      orderBy: { closesAt: "asc" },
+      include: { match: true },
+      take: 100,
+    }),
+    getGlobalRakeBps(),
+  ]);
+  return pools.map((p) => toView(p, rakeBps, now));
 }
 
 /** One pool with its match, or `null`. */
@@ -134,11 +153,14 @@ export async function getPoolDetail(
   poolId: string,
   now: Date = new Date(),
 ): Promise<PoolView | null> {
-  const pool = await prisma.pool.findUnique({
-    where: { id: poolId },
-    include: { match: true },
-  });
-  return pool ? toView(pool, now) : null;
+  const [pool, rakeBps] = await Promise.all([
+    prisma.pool.findUnique({
+      where: { id: poolId },
+      include: { match: true },
+    }),
+    getGlobalRakeBps(),
+  ]);
+  return pool ? toView(pool, rakeBps, now) : null;
 }
 
 /**
@@ -238,22 +260,25 @@ export interface AdminPool {
 export async function listAdminPools(
   now: Date = new Date(),
 ): Promise<AdminPool[]> {
-  const pools = await prisma.pool.findMany({
-    where: {
-      status: {
-        in: [PoolStatus.PENDING_ONCHAIN, PoolStatus.OPEN, PoolStatus.LOCKED],
+  const [pools, rakeBps] = await Promise.all([
+    prisma.pool.findMany({
+      where: {
+        status: {
+          in: [PoolStatus.PENDING_ONCHAIN, PoolStatus.OPEN, PoolStatus.LOCKED],
+        },
       },
-    },
-    orderBy: { closesAt: "asc" },
-    include: { match: true },
-    take: 200,
-  });
+      orderBy: { closesAt: "asc" },
+      include: { match: true },
+      take: 200,
+    }),
+    getGlobalRakeBps(),
+  ]);
 
   return pools.map((p) => ({
     poolId: p.id,
     onchainPoolId: p.onchainPoolId,
     status: effectiveStatus(p.status, p.closesAt, now),
-    rakeBps: p.rakeBps,
+    rakeBps,
     closesAt: p.closesAt,
     homeTeam: p.match.homeTeam,
     awayTeam: p.match.awayTeam,
