@@ -58,7 +58,6 @@ function OpenPoolSection({ candidates }: { candidates: MatchCandidate[] }) {
   const [closesAt, setClosesAt] = useState(
     candidates[0] ? toLocalInputValue(new Date(candidates[0].kickoffAt)) : "",
   );
-  const [rakeBps, setRakeBps] = useState("500");
 
   if (candidates.length === 0) {
     return (
@@ -80,7 +79,6 @@ function OpenPoolSection({ candidates }: { candidates: MatchCandidate[] }) {
       const res = await openPoolAction({
         matchId: selected.id,
         closesAt: closesAtSec,
-        rakeBps: Number(rakeBps),
       });
       setResult(res);
     });
@@ -121,17 +119,7 @@ function OpenPoolSection({ candidates }: { candidates: MatchCandidate[] }) {
           />
         </label>
 
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          Rake (bps, max 1000)
-          <input
-            type="number"
-            min={0}
-            max={1000}
-            className="w-32 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-            value={rakeBps}
-            onChange={(e) => setRakeBps(e.target.value)}
-          />
-        </label>
+
 
         <PrimaryButton
           type="button"

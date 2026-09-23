@@ -90,12 +90,6 @@ export function BetSheet({
     query: { enabled: Boolean(address && TOKEN_ADDRESS && MARKET_ADDRESS) },
   });
 
-  const { data: minStake } = useReadContract({
-    address: MARKET_ADDRESS,
-    abi: sachetMarketAbi,
-    functionName: "minStake",
-    query: { enabled: Boolean(MARKET_ADDRESS) },
-  });
 
   // Keep the last real selection so the sheet still shows content while it
   // animates closed (selection becomes null the moment we start closing).
@@ -116,7 +110,7 @@ export function BetSheet({
         ? pool.awayTeam
         : "the draw";
 
-  const min = minStake ?? 0n;
+  const min = parseToken("1", TOKEN_DECIMALS) ?? 1000000000000000000n;
   const parsedAmount = parseToken(stakeStr, TOKEN_DECIMALS);
   const amount = parsedAmount ?? 0n;
   const tooSmall = parsedAmount !== null && amount > 0n && amount < min;
@@ -128,7 +122,7 @@ export function BetSheet({
         BigInt(pool.totalStake),
         BigInt(pool.stakeBySelection[active]),
         amount,
-        pool.rakeBps,
+        5,
       )
     : 0n;
   const profit = payout > amount ? payout - amount : 0n;
@@ -169,7 +163,7 @@ export function BetSheet({
       const betHash = await mutateAsync({
         address: MARKET_ADDRESS,
         abi: sachetMarketAbi,
-        functionName: "bet",
+        functionName: "placeBet",
         args: [
           pool.onchainPoolId as `0x${string}`,
           SELECTION_CODE[active],
