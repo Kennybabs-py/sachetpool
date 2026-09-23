@@ -7,6 +7,7 @@ import { sachetMarketAbi } from "./contracts/sachet-market";
 import { chain, MARKET_ADDRESS, MARKET_DEPLOY_BLOCK } from "@/config/chains";
 import { codeToSelection } from "./onchain";
 import { winnerPayout } from "./odds";
+import { getGlobalRakeBps } from "./pools";
 import {
   BetStatus,
   PoolStatus,
@@ -64,7 +65,7 @@ function cursorId(): string {
 
 // ── Event handlers ─────────────────────────────────────────────────────────
 
-async function handlePoolCreated(args: Record<string, unknown>) {
+async function handlePoolLaunched(args: Record<string, unknown>) {
   const poolId = String(args.poolId);
   await prisma.pool.updateMany({
     where: { onchainPoolId: poolId },
@@ -77,8 +78,8 @@ async function handleBetPlaced(
   log: DecodedLog,
 ) {
   const poolId = String(args.poolId);
-  const bettor = String(args.bettor).toLowerCase();
-  const selection = codeToSelection(Number(args.selection));
+  const bettor = String(args.user).toLowerCase();
+  const selection = codeToSelection(Number(args.outcome));
   const amount = BigInt(args.amount as bigint);
   const txHash = log.transactionHash;
   const logIndex = log.logIndex ?? 0;
@@ -133,13 +134,67 @@ async function handleBetPlaced(
   });
 }
 
+async function handleBetWithdrawn(args: Record<string, unknown>, log: DecodedLog) {
+  const poolId = String(args.poolId);
+  const bettor = String(args.user).toLowerCase();
+  const amount = BigInt(args.amount as bigint);
+
+  const pool = await prisma.pool.findUnique({
+    where: { onchainPoolId: poolId },
+    select: { id: true },
+  });
+  if (!pool) return;
+
+  const bets = await prisma.bet.findMany({
+    where: { poolId: pool.id, address: bettor, status: BetStatus.PENDING },
+  });
+  
+  let selection: Selection | undefined;
+  for (const bet of bets) {
+    selection = bet.selection;
+    await prisma.bet.update({
+      where: { id: bet.id },
+      data: { status: BetStatus.WITHDRAWN },
+    });
+  }
+
+  if (selection) {
+    const stakeField = selection === Selection.HOME ? "stakeHome" : selection === Selection.DRAW ? "stakeDraw" : "stakeAway";
+    await prisma.pool.update({
+      where: { id: pool.id },
+      data: {
+        totalStake: { decrement: amount },
+        [stakeField]: { decrement: amount },
+      },
+    });
+  }
+}
+
+async function handlePoolCancelled(args: Record<string, unknown>) {
+  const poolId = String(args.poolId);
+  const pool = await prisma.pool.findUnique({
+    where: { onchainPoolId: poolId },
+  });
+  if (!pool) return;
+  if (pool.status === PoolStatus.CANCELLED) return;
+
+  await prisma.pool.update({
+    where: { id: pool.id },
+    data: { status: PoolStatus.CANCELLED },
+  });
+
+  await prisma.bet.updateMany({
+    where: { poolId: pool.id, status: BetStatus.PENDING },
+    data: { status: BetStatus.VOID },
+  });
+}
+
 async function handlePoolResolved(
   args: Record<string, unknown>,
   log: DecodedLog,
 ) {
   const poolId = String(args.poolId);
-  const outcome = Number(args.outcome);
-  const refundMode = Boolean(args.refundMode);
+  const outcome = Number(args.result);
 
   const pool = await prisma.pool.findUnique({
     where: { onchainPoolId: poolId },
@@ -147,7 +202,8 @@ async function handlePoolResolved(
   if (!pool) return;
   if (
     pool.status === PoolStatus.RESOLVED ||
-    pool.status === PoolStatus.VOID
+    pool.status === PoolStatus.VOID ||
+    pool.status === PoolStatus.CANCELLED
   ) {
     return; // already applied
   }
@@ -155,6 +211,7 @@ async function handlePoolResolved(
   const selection = codeToSelection(outcome);
   const status =
     outcome === 4 || !selection ? PoolStatus.VOID : PoolStatus.RESOLVED;
+  const refundMode = status === PoolStatus.VOID;
 
   await prisma.pool.update({
     where: { id: pool.id },
@@ -177,6 +234,8 @@ async function handlePoolResolved(
     where: { poolId: pool.id, status: BetStatus.PENDING },
   });
 
+  const currentRakeBps = bets.length > 0 ? await getGlobalRakeBps() : 5;
+
   for (const bet of bets) {
     if (refundMode) {
       await prisma.bet.update({
@@ -190,7 +249,7 @@ async function handlePoolResolved(
         pool.totalStake,
         bet.amount,
         winningStake,
-        pool.rakeBps,
+        currentRakeBps,
       );
       await prisma.bet.update({
         where: { id: bet.id },
@@ -207,7 +266,7 @@ async function handlePoolResolved(
 
 async function handleClaimed(args: Record<string, unknown>, log: DecodedLog) {
   const poolId = String(args.poolId);
-  const bettor = String(args.bettor).toLowerCase();
+  const bettor = String(args.user).toLowerCase();
 
   const pool = await prisma.pool.findUnique({
     where: { onchainPoolId: poolId },
@@ -230,16 +289,20 @@ async function handleClaimed(args: Record<string, unknown>, log: DecodedLog) {
 
 async function applyLog(log: DecodedLog) {
   switch (log.eventName) {
-    case "PoolCreated":
-      return handlePoolCreated(log.args);
+    case "PoolLaunched":
+      return handlePoolLaunched(log.args);
     case "BetPlaced":
       return handleBetPlaced(log.args, log);
+    case "BetWithdrawn":
+      return handleBetWithdrawn(log.args, log);
+    case "PoolCancelled":
+      return handlePoolCancelled(log.args);
     case "PoolResolved":
       return handlePoolResolved(log.args, log);
     case "Claimed":
       return handleClaimed(log.args, log);
     default:
-      return; // TreasuryWithdrawn / OperatorChanged / MinStakeChanged: audit only
+      return; 
   }
 }
 
