@@ -10,7 +10,7 @@ import {
   outcomeToCode,
   type OnchainOutcome,
 } from "@/lib/onchain";
-import { operatorCreatePool, operatorResolvePool } from "@/lib/market";
+import { launchPool, resolvePool } from "@/lib/market";
 
 /**
  * Admin dashboard server actions.
@@ -34,7 +34,6 @@ export async function openPoolAction(input: {
   matchId: string;
   /** Unix seconds; selection expiry (defaults to kickoff in the UI). */
   closesAt: number;
-  rakeBps: number;
 }): Promise<ActionResult> {
   let address: string;
   try {
@@ -58,7 +57,6 @@ export async function openPoolAction(input: {
     return { ok: false, error: "Expiry must be in the future." };
   }
 
-  const rakeBps = Math.min(Math.max(0, Math.trunc(input.rakeBps)), 1000);
   const onchainPoolId = computeOnchainPoolId(match.externalId);
 
   const pool = await prisma.pool.create({
@@ -67,7 +65,6 @@ export async function openPoolAction(input: {
       onchainPoolId,
       type: PoolType.RESULT_1X2,
       status: PoolStatus.PENDING_ONCHAIN,
-      rakeBps,
       closesAt: new Date(closesAt * 1000),
       createdBy: address,
     },
@@ -75,7 +72,7 @@ export async function openPoolAction(input: {
   });
 
   try {
-    const txHash = await operatorCreatePool(onchainPoolId, closesAt, rakeBps);
+    const txHash = await launchPool(onchainPoolId, closesAt);
     await prisma.pool.update({
       where: { id: pool.id },
       data: { status: PoolStatus.OPEN, createTxHash: txHash },
@@ -124,7 +121,7 @@ export async function resolvePoolAction(input: {
 
   let txHash: string;
   try {
-    txHash = await operatorResolvePool(
+    txHash = await resolvePool(
       pool.onchainPoolId as `0x${string}`,
       code,
     );

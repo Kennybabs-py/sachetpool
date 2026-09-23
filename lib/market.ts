@@ -41,17 +41,16 @@ async function wait(hash: Hash): Promise<Hash> {
 }
 
 /** Open a pool on-chain. `expiresAt` is a unix timestamp in seconds. */
-export async function operatorCreatePool(
+export async function launchPool(
   poolId: `0x${string}`,
   expiresAt: number,
-  rakeBps: number,
 ): Promise<Hash> {
   const wallet = getOperatorWalletClient();
   const hash = await wallet.writeContract({
     address: marketAddress(),
     abi: sachetMarketAbi,
-    functionName: "createPool",
-    args: [poolId, BigInt(expiresAt), rakeBps],
+    functionName: "launchPool",
+    args: [poolId, BigInt(expiresAt)],
     account: wallet.account,
     chain: wallet.chain,
   });
@@ -59,7 +58,7 @@ export async function operatorCreatePool(
 }
 
 /** Resolve a pool with outcome 1/2/3 (HOME/DRAW/AWAY) or 4 (VOID). */
-export async function operatorResolvePool(
+export async function resolvePool(
   poolId: `0x${string}`,
   outcome: number,
 ): Promise<Hash> {
@@ -67,7 +66,7 @@ export async function operatorResolvePool(
   const hash = await wallet.writeContract({
     address: marketAddress(),
     abi: sachetMarketAbi,
-    functionName: "resolve",
+    functionName: "resolvePool",
     args: [poolId, outcome],
     account: wallet.account,
     chain: wallet.chain,
@@ -76,13 +75,17 @@ export async function operatorResolvePool(
 }
 
 /** Sweep accrued rake to `to`. */
-export async function operatorWithdrawTreasury(to: Address): Promise<Hash> {
+export async function withdrawTreasury(
+  token: Address,
+  to: Address,
+  amount: bigint,
+): Promise<Hash> {
   const wallet = getOperatorWalletClient();
   const hash = await wallet.writeContract({
     address: marketAddress(),
     abi: sachetMarketAbi,
     functionName: "withdrawTreasury",
-    args: [to],
+    args: [token, to, amount],
     account: wallet.account,
     chain: wallet.chain,
   });
