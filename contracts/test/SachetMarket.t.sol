@@ -57,7 +57,7 @@ contract SachetMarketTest is Test {
         token = new MockToken();
         
         vm.startPrank(admin);
-        escrow = new SachetMarket(address(token), admin);
+        escrow = new SachetMarket(address(token), admin, 5);
         escrow.grantRole(escrow.RESOLVER_ROLE(), resolver);
         vm.stopPrank();
         
@@ -488,7 +488,7 @@ contract SachetMarketTest is Test {
         ReentrantMockToken rToken = new ReentrantMockToken();
         
         vm.prank(admin);
-        SachetMarket rEscrow = new SachetMarket(address(rToken), admin);
+        SachetMarket rEscrow = new SachetMarket(address(rToken), admin, 5);
         rToken.setEscrow(rEscrow);
         
         rToken.mint(alice, 1000);
