@@ -30,7 +30,7 @@ Design goals:
 - **Exact off-chain parity.** `lib/odds.ts` reproduces the payout math and is
   unit-tested against the same numbers (see `lib/odds.test.ts`).
 - **Flexible Token and Treasury.** The betting token can be dynamically updated by an admin (when the market is paused), and generic tokens can be withdrawn via `withdrawTreasury`.
-- **No Rake.** Currently, 100% of the losing pool is distributed proportionally to the winners.
+- **Configurable Rake.** A global `rakeBps` (min 1, max 10 basis points) is deducted from the total pool before distributing winnings to the correct outcome backers. The rake stays in the contract to be collected via `withdrawTreasury`.
 
 ---
 
@@ -95,6 +95,7 @@ struct Bet {
 | `cancelPool(bytes32 poolId)`                                             | `ADMIN_ROLE`   | Emergency cancels an open pool, forcing a 100% refund.                                                                                                            |
 | `claim(bytes32 poolId)`                                                  | anyone         | Pulls payout for a winning bet, or refund if pool is `CANCELLED` or `VOID`.                                                                                       |
 | `updateToken(address newToken)`                                          | `ADMIN_ROLE`   | Dynamically changes the active betting token. Must be paused.                                                                                                     |
+| `setRakeBps(uint256 newRake)`                                            | `ADMIN_ROLE`   | Updates the global rake. Must be between 1 and 10 basis points.                                                                                                   |
 | `withdrawTreasury(address token, address to, uint256 amount)`            | `ADMIN_ROLE`   | Sweeps any ERC20 out of the contract. Must be paused. Passing `type(uint256).max` sweeps full balance.                                                            |
 
 ### Events
@@ -108,6 +109,7 @@ event PoolCancelled(bytes32 indexed poolId);
 event Claimed(bytes32 indexed poolId, address indexed user, uint256 payout);
 event TokenUpdated(address indexed oldToken, address indexed newToken);
 event TreasuryWithdrawn(address indexed token, address indexed to, uint256 amount);
+event RakeUpdated(uint256 oldRake, uint256 newRake);
 ```
 
 These are the exact events the indexer decodes (`lib/indexer.ts`). `PoolLaunched`,
@@ -121,7 +123,7 @@ for audit only.
 `InvalidResult`, `NoActiveBet`, `NoClaimableBet`, `NotResolvedOrCancelled`,
 `PoolAlreadyExists`, `PoolClosed`, `PoolDoesNotExist`, `PoolNotOpen`,
 `PoolStillOpen`, `ReceivedAmountMustBeGreaterThan0`, `TooLateToWithdraw`,
-`ZeroAddress`, `AmountExceedsBalance`, `CannotChangeOutcome`.
+`ZeroAddress`, `AmountExceedsBalance`, `CannotChangeOutcome`, `InvalidRake`.
 
 ---
 
@@ -145,9 +147,9 @@ the same value to `launchPool`. `launchPool` also rejects a reused id
 All arithmetic is integer with floor division; amounts are token base units.
 
 - **Distributing Winnings**: 
+  - `distributablePot` is `totalPool - (totalPool * rakeBps / 10000)`.
   - `winningPool` is the total tokens wagered on the correct outcome.
-  - `losingPool` is `totalPool - winningPool`.
-  - Payout is calculated as: `payout = originalAmount + (originalAmount * losingPool) / winningPool`.
+  - Payout is calculated as: `payout = (distributablePot * originalAmount) / winningPool`.
 - **Refunds (`VOID` or `CANCELLED`)**:
   - Payout is exactly 100% of the original wager.
 - **Zero Winner Edge Case**:
@@ -155,7 +157,7 @@ All arithmetic is integer with floor division; amounts are token base units.
 
 Off-chain parity lives in `lib/odds.ts`:
 
-- `distributablePot`, `winnerPayout` — identical integer math (now without rake).
+- `distributablePot`, `winnerPayout` — identical integer math (now with dynamic `rakeBps` configuration).
 - `projectPayout` — what a bet would return if the pool closed now.
 - `impliedMultiple` — display-only multiple for the board.
 
