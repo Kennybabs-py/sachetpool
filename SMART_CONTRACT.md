@@ -230,8 +230,8 @@ yarn export:abi          # node scripts/export-abi.mjs
 yarn deploy:market       # prints MARKET_ADDRESS + MARKET_DEPLOY_BLOCK
 ```
 
-Required env for deploy: `RPC_URL`, `SACH_TOKEN_ADDRESS`, `TREASURY_ADDRESS`,
-`OPERATOR_PRIVATE_KEY` (or equivalent for admin/resolver keys), `DEPLOYER_PRIVATE_KEY`.
+Required env for deploy: `RPC_URL`, `SACH_TOKEN_ADDRESS`, `DEPLOYER_PRIVATE_KEY`.
+Optional env: `ADMIN_ADDRESS` (defaults to deployer if unset), `RAKE_BPS` (defaults to 5).
 
 After deploy, set `MARKET_ADDRESS` and `MARKET_DEPLOY_BLOCK` (server + matching
 `NEXT_PUBLIC_*` mirror for the address) in the app env. The indexer starts at
