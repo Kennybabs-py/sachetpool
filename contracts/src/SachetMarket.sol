@@ -75,7 +75,12 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
     /// @notice The ERC20 token currently configured for wagering
     IERC20 public sachetMarketToken;
 
+    /// @notice Global rake in basis points (min 1, max 10)
+    uint256 public rakeBps = 1;
+
     // Custom Errors
+    /// @notice Thrown when attempting to set rake outside allowed range
+    error InvalidRake();
     /// @notice Thrown when a user attempts to claim a payout more than once
     error AlreadyClaimed();
     /// @notice Thrown when an admin/resolver attempts an action on a pool that is already finalized
@@ -129,17 +134,23 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
     event Claimed(bytes32 indexed poolId, address indexed user, uint256 payout);
     event TokenUpdated(address indexed oldToken, address indexed newToken);
     event TreasuryWithdrawn(address indexed token, address indexed to, uint256 amount);
+    event RakeUpdated(uint256 oldRake, uint256 newRake);
 
 
     /**
      * @notice Initializes the SachetMarket contract.
      * @param _sachetMarketToken The address of the ERC20 token used for betting.
      * @param _adminMultisig The address to be granted DEFAULT_ADMIN_ROLE and ADMIN_ROLE.
+     * @param _rakeBps The initial global rake in basis points (1-10).
      */
-    constructor(address _sachetMarketToken, address _adminMultisig) {
+    constructor(address _sachetMarketToken, address _adminMultisig, uint256 _rakeBps) {
         if (!(_sachetMarketToken != address(0))) revert ZeroAddress();
         if (!(_adminMultisig != address(0))) revert ZeroAddress();
+        if (_rakeBps < 1 || _rakeBps > 10) revert InvalidRake();
+        
         sachetMarketToken = IERC20(_sachetMarketToken);
+        rakeBps = _rakeBps;
+        
         _grantRole(DEFAULT_ADMIN_ROLE, _adminMultisig);
         _grantRole(ADMIN_ROLE, _adminMultisig);
     }
@@ -325,14 +336,14 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
                 winningPool = r.poolAway;
             }
 
-            uint256 losingPool = r.totalPool - winningPool;
+            uint256 distributablePot = r.totalPool - ((r.totalPool * rakeBps) / 10000);
 
             if (b.outcome != result) {
                 payout = 0;
             } else if (winningPool == 0) {
                 payout = 0;
             } else {
-                payout = b.amount + (b.amount * losingPool) / winningPool;
+                payout = (distributablePot * b.amount) / winningPool;
             }
         }
 
@@ -381,6 +392,19 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
             IERC20(token).safeTransfer(to, amount);
             emit TreasuryWithdrawn(token, to, amount);
         }
+    }
+
+
+    /**
+     * @notice Updates the global rake BPS.
+     * @param newRake The new rake in basis points (1-10).
+     * @dev Only callable by accounts with the ADMIN_ROLE.
+     */
+    function setRakeBps(uint256 newRake) external onlyRole(ADMIN_ROLE) {
+        if (newRake < 1 || newRake > 10) revert InvalidRake();
+        uint256 oldRake = rakeBps;
+        rakeBps = newRake;
+        emit RakeUpdated(oldRake, newRake);
     }
 
 
