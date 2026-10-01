@@ -13,6 +13,7 @@
     "db:generate": "prisma generate",
     "test": "vitest run",
     "export:abi": "node scripts/export-abi.mjs",
+    "brand:assets": "node scripts/generate-brand-assets.mjs",
     "deploy:market": "tsx scripts/deploy-market.ts",
     "forge:test": "forge test --root contracts",
     "postinstall": "prisma generate"

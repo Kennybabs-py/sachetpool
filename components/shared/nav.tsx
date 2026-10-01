@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { isAdmin } from "@/lib/admin";
+import { LogoLockup } from "@/components/brand/logo";
 import { SachBalance } from "@/components/wallet/sach-balance";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { shortAddress } from "@/lib/format";
@@ -8,8 +9,11 @@ import { shortAddress } from "@/lib/format";
 export function Nav({ address }: { address: string }) {
   return (
     <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-border bg-background/80 px-4 py-3 backdrop-blur">
-      <Link href="/board" className="text-sm font-semibold tracking-tight">
-        Sachet
+      <Link
+        href="/board"
+        className="text-foreground transition-colors hover:text-muted-foreground"
+      >
+        <LogoLockup markClassName="size-4" wordmarkClassName="text-xs" />
       </Link>
       <nav className="flex items-center gap-3 text-sm text-muted-foreground">
         <Link href="/board" className="transition-colors hover:text-foreground">

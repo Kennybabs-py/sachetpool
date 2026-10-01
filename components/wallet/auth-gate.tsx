@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 
+import { LogoLockup } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 
 const TRUST = [
@@ -44,6 +45,12 @@ export function AuthGate() {
 
       <div className="relative w-full max-w-md">
         <div className="rounded-2xl border border-border bg-card p-8 text-card-foreground sm:p-10">
+          <LogoLockup
+            className="reveal mb-6"
+            markClassName="size-5"
+            wordmarkClassName="text-xs"
+          />
+
           <p className="reveal font-mono text-[11px] tracking-[0.22em] text-muted-foreground uppercase">
             Sign in · Robinhood Chain
           </p>

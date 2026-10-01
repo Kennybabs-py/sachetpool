@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { LogoLockup } from "@/components/brand/logo";
+
 const LINKS = [
   { href: "/board", label: "Board" },
   { href: "/leaderboard", label: "Leaderboard" },
@@ -12,12 +14,11 @@ export function SiteFooter() {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2.5 text-foreground">
-              <span aria-hidden className="size-2.5 bg-foreground" />
-              <span className="font-mono text-sm font-medium tracking-[0.2em] uppercase">
-                Sachet
-              </span>
-            </div>
+            <LogoLockup
+              className="text-foreground"
+              markClassName="size-4"
+              wordmarkClassName="text-sm"
+            />
             <p className="mt-3 max-w-xs text-sm text-muted-foreground">
               Pari-mutuel football markets, staked in $SACH on Robinhood Chain.
             </p>
