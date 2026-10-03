@@ -248,7 +248,10 @@ export function BetSheet({
               onChange={(e) =>
                 setStakeStr(e.target.value.replace(/[^0-9.]/g, ""))
               }
-              className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive"
+              className={cn(
+                "w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold",
+                "tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive",
+              )}
               aria-invalid={overBalance || undefined}
             />
             <div className="mt-2 flex flex-wrap items-center gap-2">
