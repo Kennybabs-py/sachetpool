@@ -2,9 +2,8 @@ import Link from "next/link";
 import { isAdmin } from "@/lib/admin";
 import { LogoLockup } from "@/components/brand/logo";
 import { NavLink } from "@/components/shared/nav-link";
-import { SachBalance } from "@/components/wallet/sach-balance";
+import { WalletMenu } from "@/components/wallet/wallet-menu";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
-import { shortAddress } from "@/lib/format";
 
 /** Top navigation for the authenticated app. */
 export function Nav({ address }: { address: string }) {
@@ -24,10 +23,7 @@ export function Nav({ address }: { address: string }) {
         {isAdmin(address) && <NavLink href="/admin">Admin</NavLink>}
       </nav>
       <div className="ml-auto flex items-center gap-2">
-        <SachBalance />
-        <span className="hidden text-xs text-muted-foreground sm:inline">
-          {shortAddress(address)}
-        </span>
+        <WalletMenu address={address} />
         <ThemeToggle />
       </div>
     </header>

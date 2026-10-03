@@ -15,6 +15,7 @@ import {
 } from "@/config/chains";
 import { erc20Abi } from "@/lib/contracts/erc20";
 import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
+import { useSachBalance } from "@/hooks/use-sach-balance";
 import {
   useConnection,
   usePublicClient,
@@ -74,13 +75,7 @@ export function BetSheet({
   const publicClient = usePublicClient();
   const { mutateAsync } = useWriteContract();
 
-  const { data: balance, refetch: refetchBalance } = useReadContract({
-    address: TOKEN_ADDRESS,
-    abi: erc20Abi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: Boolean(address && TOKEN_ADDRESS) },
-  });
+  const { balance, refetch: refetchBalance } = useSachBalance();
 
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: TOKEN_ADDRESS,

@@ -20,7 +20,7 @@ import { QueryClient, QueryClientProvider } from "@/lib/tanstack";
 import { rainbowkitConfig } from "@/config/rainbowkitConfig";
 
 const getSiweMessageOptions: GetSiweMessageOptions = () => ({
-  statement: "Sign in to Sachet",
+  statement: "Sign in to Sachet Pool",
 });
 
 const queryClient = new QueryClient();
