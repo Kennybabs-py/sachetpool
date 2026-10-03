@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Inter, Geist_Mono, Google_Sans_Flex } from "next/font/google";
+import localFont from "next/font/local";
+
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
@@ -7,16 +8,14 @@ import AppProvider from "@/components/shared/app-provider";
 import { ThemeProvider } from "@/components/shared/theme-provider";
 import { SmoothScroll } from "@/components/shared/smooth-scroll";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const googleSansFlex = Google_Sans_Flex({
-  variable: "--font-google-sans-flex",
-  subsets: ["latin"],
+const sans = localFont({
+  src: "./fonts/googlesansflex-regular.ttf",
+  variable: "--font-sans",
+  weight: "400",
+  style: "normal",
+  display: "swap",
+  preload: true,
+  fallback: ["system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
 });
 
 const appUrl =
@@ -77,14 +76,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn(
-        "h-full",
-        "antialiased",
-        googleSansFlex.variable,
-        geistMono.variable,
-        inter.variable,
-        "font-sans",
-      )}
+      className={cn("h-full", "antialiased", sans.variable, "font-sans")}
     >
       <body className="min-h-full flex flex-col">
         <ThemeProvider

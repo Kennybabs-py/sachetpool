@@ -11,10 +11,11 @@ export function Nav({ address }: { address: string }) {
     <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-border bg-background/80 px-4 py-3 backdrop-blur">
       <Link
         href="/board"
-        className="text-foreground transition-colors hover:text-muted-foreground"
+        className="grid place-items-center text-foreground transition-colors hover:text-muted-foreground"
       >
         <LogoLockup markClassName="size-4" wordmarkClassName="text-xs" />
       </Link>
+
       <nav className="flex items-center gap-3 text-sm text-muted-foreground">
         <Link href="/board" className="transition-colors hover:text-foreground">
           Board

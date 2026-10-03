@@ -22,12 +22,18 @@ export function SiteHeader() {
         </Link>
 
         <nav className="ml-2 hidden items-center gap-6 text-sm text-muted-foreground sm:flex">
-          <a
-            href="#how-it-works"
+          <Link
+            href="/#how-it-works"
             className="py-2 transition-colors duration-100 ease-out hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             How it works
-          </a>
+          </Link>
+          <Link
+            href="/faqs"
+            className="py-2 transition-colors duration-100 ease-out hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            FAQs
+          </Link>
           <Link
             href="/leaderboard"
             className="py-2 transition-colors duration-100 ease-out hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"

@@ -6,6 +6,7 @@ const LINKS = [
   { href: "/board", label: "Board" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/my-bets", label: "My bets" },
+  { href: "/faqs", label: "FAQs" },
 ] as const;
 
 export function SiteFooter() {
