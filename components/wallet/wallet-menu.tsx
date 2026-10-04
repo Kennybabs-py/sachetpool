@@ -1,8 +1,6 @@
 "use client";
 
-import { signOut } from "next-auth/react";
 import { ChevronDown, LogOut } from "lucide-react";
-import { useConnection, useDisconnect } from "wagmi";
 
 import {
   DropdownMenu,
@@ -12,23 +10,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SachBalance } from "@/components/wallet/sach-balance";
+import { useDisconnectWallet } from "@/hooks/use-disconnect-wallet";
 import { shortAddress } from "@/lib/format";
 
 /**
  * Wallet control for the app nav. The trigger shows the signed-in address; the
  * menu opens with the live `$SACH` balance, the full address, and Disconnect.
- *
- * Disconnecting also ends the SIWE session, otherwise the app would stay
- * "signed in" with no wallet behind it.
  */
 export function WalletMenu({ address }: { address: string }) {
-  const { isConnected } = useConnection();
-  const { mutateAsync } = useDisconnect();
-
-  async function handleDisconnect() {
-    if (isConnected) await mutateAsync();
-    await signOut({ callbackUrl: "/" });
-  }
+  const disconnectWallet = useDisconnectWallet();
 
   return (
     <DropdownMenu>
@@ -51,7 +41,7 @@ export function WalletMenu({ address }: { address: string }) {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem variant="destructive" onClick={handleDisconnect}>
+        <DropdownMenuItem variant="destructive" onClick={disconnectWallet}>
           <LogOut aria-hidden />
           Disconnect
         </DropdownMenuItem>
