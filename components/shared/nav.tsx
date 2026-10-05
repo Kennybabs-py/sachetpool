@@ -24,6 +24,7 @@ export function Nav({ address }: { address: string }) {
         <NavLink href="/my-bets">My bets</NavLink>
         <NavLink href="/leaderboard">Leaderboard</NavLink>
         {admin && <NavLink href="/admin">Admin</NavLink>}
+        {admin && <NavLink href="/sandbox">Sandbox</NavLink>}
       </nav>
 
       <div className="ml-auto flex items-center gap-2">

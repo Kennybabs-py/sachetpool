@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPoolDetailData } from "@/lib/pools";
 import { PoolCard } from "@/components/pools/pool-card";
+import { MinStake } from "@/components/pools/min-stake";
 import { formatToken } from "@/lib/format";
 import { TOKEN_DECIMALS, TOKEN_SYMBOL } from "@/config/chains";
 
@@ -29,6 +30,8 @@ export default async function PoolDetailPage({
       </Link>
 
       <PoolCard pool={pool} serverNowMs={serverNowMs} />
+
+      <MinStake />
 
       {resolved && (
         <div className="rounded-2xl border border-border bg-card p-4 text-sm">

@@ -74,6 +74,15 @@ export function MobileNav({
                 Admin
               </NavLink>
             )}
+            {isAdmin && (
+              <NavLink
+                href="/sandbox"
+                onClick={() => setOpen(false)}
+                className="py-2 text-base"
+              >
+                Sandbox
+              </NavLink>
+            )}
           </nav>
 
           <SheetFooter className="gap-3 border-t border-border">
