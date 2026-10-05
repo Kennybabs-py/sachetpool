@@ -8,8 +8,10 @@ import "server-only";
  * admin's own wallet never signs (see the plan's key-custody note).
  */
 
+const ADMIN_ADDRESSES = process.env.ADMIN_ADDRESSES as unknown as string;
+
 function adminAddresses(): string[] {
-  return (process.env.ADMIN_ADDRESSES ?? "")
+  return (ADMIN_ADDRESSES ?? "")
     .split(",")
     .map((a) => a.trim().toLowerCase())
     .filter(Boolean);

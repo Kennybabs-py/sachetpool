@@ -15,6 +15,7 @@ import {
 } from "@/config/chains";
 import { erc20Abi } from "@/lib/contracts/erc20";
 import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
+import { useSachBalance } from "@/hooks/use-sach-balance";
 import {
   useConnection,
   usePublicClient,
@@ -74,13 +75,7 @@ export function BetSheet({
   const publicClient = usePublicClient();
   const { mutateAsync } = useWriteContract();
 
-  const { data: balance, refetch: refetchBalance } = useReadContract({
-    address: TOKEN_ADDRESS,
-    abi: erc20Abi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: Boolean(address && TOKEN_ADDRESS) },
-  });
+  const { balance, refetch: refetchBalance } = useSachBalance();
 
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: TOKEN_ADDRESS,
@@ -242,7 +237,10 @@ export function BetSheet({
               onChange={(e) =>
                 setStakeStr(e.target.value.replace(/[^0-9.]/g, ""))
               }
-              className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive"
+              className={cn(
+                "w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold",
+                "tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive",
+              )}
               aria-invalid={overBalance || undefined}
             />
             <div className="mt-2 flex flex-wrap items-center gap-2">
