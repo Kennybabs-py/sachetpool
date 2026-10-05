@@ -48,13 +48,13 @@ async function main() {
   };
 
   const token = asAddress("SACH_TOKEN_ADDRESS");
-  
+
   // The admin address can be explicitly provided, or derived from a private key.
   // For testnet deployments, we'll derive it from the deployer or a specific admin key.
-  const adminMultisig = process.env.ADMIN_ADDRESS 
-    ? asAddress("ADMIN_ADDRESS") 
+  const adminMultisig = process.env.ADMIN_ADDRESS
+    ? asAddress("ADMIN_ADDRESS")
     : privateKeyToAccount(privateKey("DEPLOYER_PRIVATE_KEY")).address;
-    
+
   const rakeBps = BigInt(process.env.RAKE_BPS || "5");
 
   const account = privateKeyToAccount(privateKey("DEPLOYER_PRIVATE_KEY"));
