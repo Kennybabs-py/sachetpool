@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/landing/site-header";
 import { FaqAccordion } from "@/components/landing/faq-accordion";
 import { NewToWeb3 } from "@/components/landing/new-to-web3";
 import { SiteFooter } from "@/components/landing/site-footer";
+import { RakeBps } from "@/components/common/rake-bps";
 import { FAQS } from "@/lib/faqs";
 
 const title = "FAQs";
@@ -51,6 +52,9 @@ export default function FaqsPage() {
             <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground text-pretty">
               How the pool works, how to join one, and how settlement pays out.
             </p>
+            <div className="mt-6">
+              <RakeBps />
+            </div>
           </div>
         </section>
 

@@ -26,7 +26,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "How is this different from a bookmaker?",
         answer:
-          "A bookmaker quotes a fixed price and carries the risk of being wrong. Here the price moves as money arrives and the house takes no position — it opens the pool, escrows the stakes and settles the result. The only house cut is a rake, capped at 10% of the pot and shown before you stake.",
+          "A bookmaker quotes a fixed price and carries the risk of being wrong. Here the price moves as money arrives and the house takes no position — it opens the pool, escrows the stakes and settles the result. The only house cut is a small rake taken from the pot before payouts; the current rate is read from the contract and shown before you stake.",
       },
       {
         question: "Where do the odds come from?",
@@ -41,7 +41,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "What does it cost?",
         answer:
-          "One rake per pool, capped at 1000 basis points (10%) and set when the pool opens. Voided pools take nothing. Joining, claiming and refunds are free — you only pay the network's gas.",
+          "One small rake per pool, taken from the pot before payouts. The rate is set on-chain and shown live before you stake. Voided pools take nothing. Joining, claiming and refunds are free — you only pay the network's gas.",
       },
     ],
   },
@@ -66,7 +66,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "Is there a minimum stake?",
         answer:
-          "Yes — a small minimum per pool, enforced by the contract so dust bets cannot distort the maths. The bet sheet shows it before you confirm.",
+          "No. Any stake above zero is accepted — the contract only rejects an empty bet. Even a tiny stake earns its proportional share of the pot, though network gas can outweigh dust-sized amounts.",
       },
     ],
   },

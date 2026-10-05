@@ -88,7 +88,7 @@ export function MarketBoard() {
             Void → full refund
           </span>
           <span className="border border-border px-2.5 py-1 font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
-            Rake ≤ 10%
+            Rake on-chain
           </span>
           <span className="border border-border px-2.5 py-1 font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
             Claim anytime
