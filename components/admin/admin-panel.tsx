@@ -119,8 +119,6 @@ function OpenPoolSection({ candidates }: { candidates: MatchCandidate[] }) {
           />
         </label>
 
-
-
         <PrimaryButton
           type="button"
           onClick={submit}

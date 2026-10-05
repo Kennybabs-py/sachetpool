@@ -110,10 +110,7 @@ export async function resolvePoolAction(input: {
     select: { id: true, onchainPoolId: true, status: true, closesAt: true },
   });
   if (!pool) return { ok: false, error: "Pool not found." };
-  if (
-    pool.status === PoolStatus.RESOLVED ||
-    pool.status === PoolStatus.VOID
-  ) {
+  if (pool.status === PoolStatus.RESOLVED || pool.status === PoolStatus.VOID) {
     return { ok: false, error: "Pool is already resolved." };
   }
 
@@ -121,10 +118,7 @@ export async function resolvePoolAction(input: {
 
   let txHash: string;
   try {
-    txHash = await resolvePool(
-      pool.onchainPoolId as `0x${string}`,
-      code,
-    );
+    txHash = await resolvePool(pool.onchainPoolId as `0x${string}`, code);
   } catch (err) {
     return {
       ok: false,

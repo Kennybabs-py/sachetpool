@@ -49,10 +49,11 @@ type Phase = "idle" | "approving" | "betting" | "done";
 /**
  * Bottom-sheet bet ticket.
  *
- * The stake is escrowed by `SachetMarket.bet`, which pulls `$SACH` with
+ * The stake is escrowed by `SachetMarket.placeBet`, which pulls `$SACH` with
  * `transferFrom` — so the flow is: check allowance, `approve` if short, then
- * `bet`. Both transactions are surfaced in the button label. The projected
- * payout uses the same integer math as the contract.
+ * `placeBet`. Staking again on the same outcome tops up the existing bet. Both
+ * transactions are surfaced in the button label. The projected payout uses the
+ * same integer math as the contract.
  */
 export function BetSheet({
   pool,
@@ -105,12 +106,10 @@ export function BetSheet({
         ? pool.awayTeam
         : "the draw";
 
-  const min = parseToken("1", TOKEN_DECIMALS) ?? 1000000000000000000n;
   const parsedAmount = parseToken(stakeStr, TOKEN_DECIMALS);
   const amount = parsedAmount ?? 0n;
-  const tooSmall = parsedAmount !== null && amount > 0n && amount < min;
   const overBalance = balance !== undefined && amount > balance;
-  const valid = parsedAmount !== null && amount >= min && !overBalance;
+  const valid = parsedAmount !== null && amount > 0n && !overBalance;
 
   const payout = valid
     ? projectPayout(
@@ -227,7 +226,7 @@ export function BetSheet({
               htmlFor="stake"
               className="mb-1 block text-xs font-medium text-muted-foreground"
             >
-              Stake ({TOKEN_SYMBOL}) · min {formatToken(min, TOKEN_DECIMALS)}
+              Stake ({TOKEN_SYMBOL})
             </label>
             <input
               id="stake"
@@ -248,7 +247,6 @@ export function BetSheet({
                 const quickAmount = parseToken(quick, TOKEN_DECIMALS);
                 const disabled =
                   quickAmount === null ||
-                  quickAmount < min ||
                   (balance !== undefined && quickAmount > balance);
                 return (
                   <Button
@@ -267,7 +265,7 @@ export function BetSheet({
                 type="button"
                 variant="secondary"
                 size="sm"
-                disabled={balance === undefined || balance < min}
+                disabled={balance === undefined || balance <= 0n}
                 onClick={() =>
                   balance !== undefined &&
                   setStakeStr(formatToken(balance, TOKEN_DECIMALS, 18))
@@ -341,9 +339,7 @@ export function BetSheet({
                         )} on ${activeTeam}`
                       : overBalance
                         ? `Not enough ${TOKEN_SYMBOL}`
-                        : tooSmall
-                          ? `Minimum ${formatToken(min, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}`
-                          : "Enter a stake"}
+                        : "Enter a stake"}
             </PrimaryButton>
           )}
           <Button

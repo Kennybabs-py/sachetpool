@@ -15,7 +15,8 @@ export async function getGlobalRakeBps(): Promise<number> {
       functionName: "rakeBps",
     });
     return Number(rake);
-  } catch (e) {
+  } catch (e: unknown) {
+    console.log(e);
     return 5;
   }
 }
@@ -91,7 +92,11 @@ type PoolRow = {
   };
 };
 
-function toView(pool: PoolRow, rakeBps: number, now: Date = new Date()): PoolView {
+function toView(
+  pool: PoolRow,
+  rakeBps: number,
+  now: Date = new Date(),
+): PoolView {
   const stakes: Record<Selection, bigint> = {
     HOME: pool.stakeHome,
     DRAW: pool.stakeDraw,

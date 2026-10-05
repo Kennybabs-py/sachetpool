@@ -17,13 +17,13 @@ import {
 } from "./onchain";
 import { getOperatorAccount } from "./chain/server-client";
 import {
+  launchPool,
   operatorBet,
   operatorClaim,
-  operatorCreatePool,
-  operatorResolvePool,
-  readMarketMinStake,
   readOperatorTokenBalance,
+  resolvePool,
 } from "./market";
+import { getGlobalRakeBps } from "./pools";
 import { formatToken, parseToken } from "./format";
 import { winnerPayout } from "./odds";
 import { MARKET_ADDRESS, TOKEN_DECIMALS, TOKEN_SYMBOL } from "@/config/chains";
@@ -72,7 +72,6 @@ export interface SandboxPoolView {
   id: string;
   onchainPoolId: string;
   status: PoolStatus;
-  rakeBps: number;
   closesAtMs: number;
   createTxHash: string | null;
   resolvedTxHash: string | null;
@@ -91,6 +90,7 @@ export interface SandboxBetView {
   amount: string;
   payout: string;
   status: BetStatus;
+  claimed: boolean;
   txHash: string;
   claimTxHash: string | null;
 }
@@ -100,7 +100,6 @@ export interface SandboxState {
   configured: boolean;
   operatorAddress: string | null;
   operatorBalance: string | null;
-  onchainMinStake: string | null;
   fixture: SandboxFixtureView | null;
   pool: SandboxPoolView | null;
   bets: SandboxBetView[];
@@ -128,17 +127,11 @@ export async function getSandboxState(): Promise<SandboxState> {
   const now = Date.now();
 
   let operatorBalance: string | null = null;
-  let onchainMinStake: string | null = null;
   if (MARKET_ADDRESS) {
     try {
       operatorBalance = (await readOperatorTokenBalance()).toString();
     } catch {
       operatorBalance = null;
-    }
-    try {
-      onchainMinStake = (await readMarketMinStake()).toString();
-    } catch {
-      onchainMinStake = null;
     }
   }
 
@@ -146,7 +139,6 @@ export async function getSandboxState(): Promise<SandboxState> {
     configured: Boolean(MARKET_ADDRESS),
     operatorAddress,
     operatorBalance,
-    onchainMinStake,
     fixture: match
       ? {
           id: match.id,
@@ -163,7 +155,6 @@ export async function getSandboxState(): Promise<SandboxState> {
           id: pool.id,
           onchainPoolId: pool.onchainPoolId,
           status: pool.status,
-          rakeBps: pool.rakeBps,
           closesAtMs: pool.closesAt.getTime(),
           createTxHash: pool.createTxHash,
           resolvedTxHash: pool.resolvedTxHash,
@@ -182,6 +173,7 @@ export async function getSandboxState(): Promise<SandboxState> {
       amount: bet.amount.toString(),
       payout: bet.payout.toString(),
       status: bet.status,
+      claimed: bet.claimed,
       txHash: bet.txHash,
       claimTxHash: bet.claimTxHash,
     })),
@@ -216,7 +208,6 @@ export async function syncDummyFixture(): Promise<string> {
 
 export async function createDummyPool(input: {
   closesInSec: number;
-  rakeBps: number;
 }): Promise<string> {
   if (!MARKET_ADDRESS) {
     throw new SandboxError("MARKET_ADDRESS is not configured.");
@@ -233,7 +224,6 @@ export async function createDummyPool(input: {
 
   const closesInSec = Math.max(30, Math.trunc(input.closesInSec));
   const closesAtSec = Math.floor(Date.now() / 1000) + closesInSec;
-  const rakeBps = Math.min(Math.max(0, Math.trunc(input.rakeBps)), 1000);
   const onchainPoolId = computeOnchainPoolId(match.externalId);
 
   const pool = await prisma.pool.create({
@@ -242,21 +232,20 @@ export async function createDummyPool(input: {
       onchainPoolId,
       type: PoolType.RESULT_1X2,
       status: PoolStatus.PENDING_ONCHAIN,
-      rakeBps,
       closesAt: new Date(closesAtSec * 1000),
     },
     select: { id: true },
   });
 
   try {
-    const txHash = await operatorCreatePool(onchainPoolId, closesAtSec, rakeBps);
+    const txHash = await launchPool(onchainPoolId, closesAtSec);
     await prisma.pool.update({
       where: { id: pool.id },
       data: { status: PoolStatus.OPEN, createTxHash: txHash },
     });
   } catch (err) {
     throw new SandboxError(
-      `Pool row saved as PENDING_ONCHAIN, but createPool failed: ${
+      `Pool row saved as PENDING_ONCHAIN, but launchPool failed: ${
         err instanceof Error ? err.message : "unknown error"
       }`,
     );
@@ -325,19 +314,41 @@ export async function placeDummyBet(input: {
     select: { id: true },
   });
 
-  await prisma.bet.create({
-    data: {
-      poolId: pool.id,
-      userId: user.id,
-      address: operatorAddress,
-      selection,
-      amount,
-      status: BetStatus.PENDING,
-      txHash: receipt.hash,
-      logIndex: receipt.logIndex,
-      blockNumber: receipt.blockNumber,
-    },
+  const existing = await prisma.bet.findUnique({
+    where: { poolId_address: { poolId: pool.id, address: operatorAddress } },
+    select: { id: true, status: true },
   });
+
+  if (existing) {
+    const restart = existing.status === BetStatus.WITHDRAWN;
+    await prisma.bet.update({
+      where: { id: existing.id },
+      data: {
+        amount: restart ? amount : { increment: amount },
+        selection,
+        status: BetStatus.PENDING,
+        payout: 0n,
+        claimed: false,
+        txHash: receipt.hash,
+        logIndex: receipt.logIndex,
+        blockNumber: receipt.blockNumber,
+      },
+    });
+  } else {
+    await prisma.bet.create({
+      data: {
+        poolId: pool.id,
+        userId: user.id,
+        address: operatorAddress,
+        selection,
+        amount,
+        status: BetStatus.PENDING,
+        txHash: receipt.hash,
+        logIndex: receipt.logIndex,
+        blockNumber: receipt.blockNumber,
+      },
+    });
+  }
 
   const stakeField =
     selection === Selection.HOME
@@ -380,10 +391,7 @@ export async function resolveDummyPool(input: {
   const code = outcomeToCode(input.outcome);
   let txHash: string;
   try {
-    txHash = await operatorResolvePool(
-      pool.onchainPoolId as `0x${string}`,
-      code,
-    );
+    txHash = await resolvePool(pool.onchainPoolId as `0x${string}`, code);
   } catch (err) {
     throw new SandboxError(
       `resolve() failed: ${err instanceof Error ? err.message : "unknown error"}`,
@@ -417,6 +425,8 @@ export async function resolveDummyPool(input: {
     where: { poolId: pool.id, status: BetStatus.PENDING },
   });
 
+  const rakeBps = await getGlobalRakeBps();
+
   for (const bet of bets) {
     if (refundMode) {
       await prisma.bet.update({
@@ -430,7 +440,7 @@ export async function resolveDummyPool(input: {
         pool.totalStake,
         bet.amount,
         winningStake,
-        pool.rakeBps,
+        rakeBps,
       );
       await prisma.bet.update({
         where: { id: bet.id },
@@ -463,15 +473,15 @@ export async function claimDummyPool(): Promise<string> {
   }
 
   const operatorAddress = getOperatorAccount().address.toLowerCase();
-  const claimable = await prisma.bet.findFirst({
-    where: {
-      poolId: pool.id,
-      address: operatorAddress,
-      status: { in: [BetStatus.WON, BetStatus.VOID] },
-    },
-    select: { id: true },
+  const claimable = await prisma.bet.findUnique({
+    where: { poolId_address: { poolId: pool.id, address: operatorAddress } },
+    select: { id: true, status: true },
   });
-  if (!claimable) {
+  if (
+    !claimable ||
+    (claimable.status !== BetStatus.WON &&
+      claimable.status !== BetStatus.VOID)
+  ) {
     throw new SandboxError("No claimable bet for the operator wallet.");
   }
 
@@ -484,13 +494,13 @@ export async function claimDummyPool(): Promise<string> {
     );
   }
 
-  await prisma.bet.updateMany({
-    where: {
-      poolId: pool.id,
-      address: operatorAddress,
-      status: { in: [BetStatus.WON, BetStatus.VOID] },
+  await prisma.bet.update({
+    where: { id: claimable.id },
+    data: {
+      claimed: true,
+      status: BetStatus.CLAIMED,
+      claimTxHash: receipt.hash,
     },
-    data: { status: BetStatus.CLAIMED, claimTxHash: receipt.hash },
   });
 
   return `Claimed ${formatToken(receipt.amount, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}.`;

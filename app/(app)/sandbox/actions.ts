@@ -60,13 +60,11 @@ export async function syncFixtureAction(): Promise<SandboxActionResult> {
 
 export async function createPoolAction(input: {
   closesInSec: number;
-  rakeBps: number;
 }): Promise<SandboxActionResult> {
   try {
     await assertAdmin();
     const message = await createDummyPool({
       closesInSec: Number(input.closesInSec),
-      rakeBps: Number(input.rakeBps),
     });
     revalidate();
     return { ok: true, message };

@@ -136,21 +136,13 @@ export async function readOperatorTokenBalance(): Promise<bigint> {
   });
 }
 
-/** The market's configured minimum stake, in token base units. */
-export async function readMarketMinStake(): Promise<bigint> {
-  return publicClient.readContract({
-    address: marketAddress(),
-    abi: sachetMarketAbi,
-    functionName: "minStake",
-  });
-}
-
 /**
  * Approve (only when short) and stake `amount` from the operator wallet.
  *
  * Betting pulls tokens with `transferFrom`, so the operator must first grant
- * allowance to the market. Returns the confirmed bet transaction plus the
- * decoded `BetPlaced` log position, so callers can mirror it idempotently.
+ * allowance. The contract tops up an existing bet on the same outcome, so
+ * calling this repeatedly grows the operator's stake in the pool. Returns the
+ * confirmed transaction plus the decoded `BetPlaced` log position.
  */
 export async function operatorBet(
   poolId: `0x${string}`,
@@ -183,7 +175,7 @@ export async function operatorBet(
   const hash = await wallet.writeContract({
     address: market,
     abi: sachetMarketAbi,
-    functionName: "bet",
+    functionName: "placeBet",
     args: [poolId, selection, amount],
     account: wallet.account,
     chain: wallet.chain,
@@ -236,6 +228,6 @@ export async function operatorClaim(
     hash,
     blockNumber: receipt.blockNumber,
     logIndex: event?.logIndex ?? 0,
-    amount: event ? event.args.amount : 0n,
+    amount: event ? event.args.payout : 0n,
   };
 }

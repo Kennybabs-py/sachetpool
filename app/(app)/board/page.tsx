@@ -1,6 +1,5 @@
 import { getBoard } from "@/lib/pools";
 import { PoolCard } from "@/components/pools/pool-card";
-import { MinStake } from "@/components/pools/min-stake";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +14,6 @@ export default async function BoardPage() {
         <p className="text-sm text-muted-foreground">
           Stake $SACH on the match result. Winners split the pot.
         </p>
-        <MinStake className="mt-1" />
       </div>
 
       {pools.length === 0 ? (

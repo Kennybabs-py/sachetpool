@@ -91,12 +91,6 @@ async function handleBetPlaced(
   if (!pool) return;
   if (!selection) return;
 
-  const existing = await prisma.bet.findUnique({
-    where: { txHash_logIndex: { txHash, logIndex } },
-    select: { id: true },
-  });
-  if (existing) return; // already mirrored
-
   const user = await prisma.user.upsert({
     where: { address: bettor },
     update: {},
@@ -104,19 +98,43 @@ async function handleBetPlaced(
     select: { id: true },
   });
 
-  await prisma.bet.create({
-    data: {
-      poolId: pool.id,
-      userId: user.id,
-      address: bettor,
-      selection,
-      amount,
-      status: BetStatus.PENDING,
-      txHash,
-      logIndex,
-      blockNumber: log.blockNumber ?? 0n,
-    },
+  // One row per (pool, address): a live stake is topped up, a withdrawn one
+  // restarts (the contract lets the outcome change once amount is back to 0).
+  const existing = await prisma.bet.findUnique({
+    where: { poolId_address: { poolId: pool.id, address: bettor } },
+    select: { id: true, status: true },
   });
+
+  if (existing) {
+    const restart = existing.status === BetStatus.WITHDRAWN;
+    await prisma.bet.update({
+      where: { id: existing.id },
+      data: {
+        amount: restart ? amount : { increment: amount },
+        selection,
+        status: BetStatus.PENDING,
+        payout: 0n,
+        claimed: false,
+        txHash,
+        logIndex,
+        blockNumber: log.blockNumber ?? 0n,
+      },
+    });
+  } else {
+    await prisma.bet.create({
+      data: {
+        poolId: pool.id,
+        userId: user.id,
+        address: bettor,
+        selection,
+        amount,
+        status: BetStatus.PENDING,
+        txHash,
+        logIndex,
+        blockNumber: log.blockNumber ?? 0n,
+      },
+    });
+  }
 
   const stakeField: "stakeHome" | "stakeDraw" | "stakeAway" =
     selection === Selection.HOME
@@ -134,7 +152,7 @@ async function handleBetPlaced(
   });
 }
 
-async function handleBetWithdrawn(args: Record<string, unknown>, log: DecodedLog) {
+async function handleBetWithdrawn(args: Record<string, unknown>) {
   const poolId = String(args.poolId);
   const bettor = String(args.user).toLowerCase();
   const amount = BigInt(args.amount as bigint);
@@ -145,29 +163,31 @@ async function handleBetWithdrawn(args: Record<string, unknown>, log: DecodedLog
   });
   if (!pool) return;
 
-  const bets = await prisma.bet.findMany({
-    where: { poolId: pool.id, address: bettor, status: BetStatus.PENDING },
+  const bet = await prisma.bet.findUnique({
+    where: { poolId_address: { poolId: pool.id, address: bettor } },
+    select: { id: true, selection: true },
   });
-  
-  let selection: Selection | undefined;
-  for (const bet of bets) {
-    selection = bet.selection;
-    await prisma.bet.update({
-      where: { id: bet.id },
-      data: { status: BetStatus.WITHDRAWN },
-    });
-  }
+  if (!bet) return;
 
-  if (selection) {
-    const stakeField = selection === Selection.HOME ? "stakeHome" : selection === Selection.DRAW ? "stakeDraw" : "stakeAway";
-    await prisma.pool.update({
-      where: { id: pool.id },
-      data: {
-        totalStake: { decrement: amount },
-        [stakeField]: { decrement: amount },
-      },
-    });
-  }
+  await prisma.bet.update({
+    where: { id: bet.id },
+    data: { amount: 0n, status: BetStatus.WITHDRAWN, payout: 0n },
+  });
+
+  const stakeField: "stakeHome" | "stakeDraw" | "stakeAway" =
+    bet.selection === Selection.HOME
+      ? "stakeHome"
+      : bet.selection === Selection.DRAW
+        ? "stakeDraw"
+        : "stakeAway";
+
+  await prisma.pool.update({
+    where: { id: pool.id },
+    data: {
+      totalStake: { decrement: amount },
+      [stakeField]: { decrement: amount },
+    },
+  });
 }
 
 async function handlePoolCancelled(args: Record<string, unknown>) {
@@ -183,10 +203,16 @@ async function handlePoolCancelled(args: Record<string, unknown>) {
     data: { status: PoolStatus.CANCELLED },
   });
 
-  await prisma.bet.updateMany({
+  const pending = await prisma.bet.findMany({
     where: { poolId: pool.id, status: BetStatus.PENDING },
-    data: { status: BetStatus.VOID },
+    select: { id: true, amount: true },
   });
+  for (const bet of pending) {
+    await prisma.bet.update({
+      where: { id: bet.id },
+      data: { status: BetStatus.VOID, payout: bet.amount },
+    });
+  }
 }
 
 async function handlePoolResolved(
@@ -274,15 +300,20 @@ async function handleClaimed(args: Record<string, unknown>, log: DecodedLog) {
   });
   if (!pool) return;
 
-  await prisma.bet.updateMany({
-    where: {
-      poolId: pool.id,
-      address: bettor,
-      status: { in: [BetStatus.WON, BetStatus.VOID] },
-    },
+  const bet = await prisma.bet.findUnique({
+    where: { poolId_address: { poolId: pool.id, address: bettor } },
+    select: { id: true, status: true },
+  });
+  if (!bet) return;
+
+  // The contract marks every settled bet claimed, including losers (payout 0).
+  await prisma.bet.update({
+    where: { id: bet.id },
     data: {
-      status: BetStatus.CLAIMED,
+      claimed: true,
       claimTxHash: log.transactionHash,
+      status:
+        bet.status === BetStatus.LOST ? BetStatus.LOST : BetStatus.CLAIMED,
     },
   });
 }
@@ -294,7 +325,7 @@ async function applyLog(log: DecodedLog) {
     case "BetPlaced":
       return handleBetPlaced(log.args, log);
     case "BetWithdrawn":
-      return handleBetWithdrawn(log.args, log);
+      return handleBetWithdrawn(log.args);
     case "PoolCancelled":
       return handlePoolCancelled(log.args);
     case "PoolResolved":

@@ -21,9 +21,9 @@ async function handle(req: Request) {
   const denied = assertCronAuthorized(req);
   if (denied) return denied;
 
-  const provider = new URL(req.url).searchParams.get("provider") as
-    | ProviderId
-    | null;
+  const provider = new URL(req.url).searchParams.get(
+    "provider",
+  ) as ProviderId | null;
 
   try {
     const service = provider

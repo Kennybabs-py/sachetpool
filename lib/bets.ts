@@ -21,6 +21,7 @@ export interface UserBetView {
   amount: string;
   status: BetStatus;
   payout: string;
+  claimed: boolean;
   txHash: string;
   claimTxHash: string | null;
   createdAt: Date;
@@ -30,14 +31,14 @@ export interface UserBetView {
   awayTeamLogo: string | null;
   kickoffAt: Date;
   poolStatus: PoolStatus;
-  /** True when the bet can be withdrawn on-chain. */
+  /** True when the bet can be claimed on-chain. */
   claimable: boolean;
 }
 
 export async function listUserBets(address: string): Promise<UserBetView[]> {
   const bets = await prisma.bet.findMany({
     where: { address: address.toLowerCase() },
-    orderBy: { createdAt: "desc" },
+    orderBy: { updatedAt: "desc" },
     take: 200,
     include: { pool: { include: { match: true } } },
   });
@@ -50,6 +51,7 @@ export async function listUserBets(address: string): Promise<UserBetView[]> {
     amount: bet.amount.toString(),
     status: bet.status,
     payout: bet.payout.toString(),
+    claimed: bet.claimed,
     txHash: bet.txHash,
     claimTxHash: bet.claimTxHash,
     createdAt: bet.createdAt,
@@ -60,6 +62,7 @@ export async function listUserBets(address: string): Promise<UserBetView[]> {
     kickoffAt: bet.pool.match.kickoffAt,
     poolStatus: bet.pool.status,
     claimable:
-      bet.status === BetStatus.WON || bet.status === BetStatus.VOID,
+      (bet.status === BetStatus.WON || bet.status === BetStatus.VOID) &&
+      !bet.claimed,
   }));
 }

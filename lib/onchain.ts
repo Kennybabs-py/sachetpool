@@ -18,9 +18,7 @@ export type OnchainOutcome = keyof typeof OUTCOME_CODE;
  * Deterministic, idempotent pool id: one pool per match. Mirrors the plan's
  * `keccak256(utf8("sachet:1x2:" + match.externalId))`.
  */
-export function computeOnchainPoolId(
-  matchExternalId: string,
-): `0x${string}` {
+export function computeOnchainPoolId(matchExternalId: string): `0x${string}` {
   return keccak256(toBytes(`sachet:1x2:${matchExternalId}`));
 }
 

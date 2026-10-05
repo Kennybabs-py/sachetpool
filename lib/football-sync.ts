@@ -182,10 +182,7 @@ export async function settleFinishedMatches(
       });
       for (const pool of candidate.pools) {
         try {
-          await resolvePool(
-            pool.onchainPoolId as `0x${string}`,
-            outcome,
-          );
+          await resolvePool(pool.onchainPoolId as `0x${string}`, outcome);
           settled++;
         } catch (err) {
           console.error(`Failed to resolve pool ${pool.id}:`, err);

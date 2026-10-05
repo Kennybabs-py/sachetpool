@@ -47,8 +47,10 @@ enum Selection {
   AWAY
 }
 
-/// Mirrored bet lifecycle. `WON`/`VOID` mean claimable on-chain; `CLAIMED`
-/// means the pull-payment has been withdrawn.
+/// Mirrored bet lifecycle. `PENDING` is a live stake that can still be topped
+/// up or withdrawn; `WON`/`VOID` are claimable on-chain; `CLAIMED` means the
+/// payout was withdrawn; `WITHDRAWN` means the bettor pulled their stake before
+/// the pool locked.
 enum BetStatus {
   PENDING
   WON
@@ -117,6 +119,10 @@ model Pool {
   @@index([status])
 }
 
+/// A wallet's position in one pool — one row per (pool, address), mirroring the
+/// contract's `bets[poolId][user]` struct. `placeBet` tops the stake up (same
+/// outcome), `withdrawBet` zeroes it before the pool locks, so `amount` is the
+/// *current* live stake and `txHash` points at the event that last touched it.
 model Bet {
   id          String    @id @default(cuid())
   poolId      String
@@ -126,9 +132,13 @@ model Bet {
   /// Lowercase address that placed the bet (denormalised for history reads).
   address     String
   selection   Selection
+  /// Current live stake; 0 once withdrawn.
   amount      BigInt
   status      BetStatus @default(PENDING)
   payout      BigInt    @default(0)
+  /// True once the on-chain `claim` marked the bet settled.
+  claimed     Boolean   @default(false)
+  /// Last event that touched this stake (place, top-up, or withdraw).
   txHash      String
   logIndex    Int
   blockNumber BigInt
@@ -136,8 +146,7 @@ model Bet {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@unique([txHash, logIndex])
-  @@index([poolId])
+  @@unique([poolId, address])
   @@index([status])
   @@index([userId])
   @@index([address])

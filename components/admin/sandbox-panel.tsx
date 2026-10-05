@@ -103,9 +103,7 @@ function StateRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 export function SandboxPanel({ state }: { state: SandboxState }) {
   const { fixture, pool, bets } = state;
-  const defaultAmount = state.onchainMinStake
-    ? formatToken(state.onchainMinStake, TOKEN_DECIMALS)
-    : "1";
+  const defaultAmount = "1";
 
   const hasPool = Boolean(pool);
   const poolOpen = pool?.status === "OPEN" && !pool.isExpired;
@@ -130,14 +128,6 @@ export function SandboxPanel({ state }: { state: SandboxState }) {
           value={
             state.operatorBalance !== null
               ? formatToken(state.operatorBalance, TOKEN_DECIMALS)
-              : "—"
-          }
-        />
-        <StateRow
-          label="Min stake"
-          value={
-            state.onchainMinStake !== null
-              ? `${formatToken(state.onchainMinStake, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}`
               : "—"
           }
         />
@@ -171,7 +161,6 @@ export function SandboxPanel({ state }: { state: SandboxState }) {
         <CreatePoolStep
           hasFixture={Boolean(fixture)}
           hasPool={hasPool}
-          defaultAmount={defaultAmount}
         />
       </Step>
 
@@ -266,16 +255,13 @@ function SyncFixtureStep({ exists }: { exists: boolean }) {
 function CreatePoolStep({
   hasFixture,
   hasPool,
-  defaultAmount,
 }: {
   hasFixture: boolean;
   hasPool: boolean;
-  defaultAmount: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<SandboxActionResult | null>(null);
   const [closesInSec, setClosesInSec] = useState("120");
-  const [rakeBps, setRakeBps] = useState("500");
 
   return (
     <div className="flex flex-col gap-3">
@@ -290,17 +276,6 @@ function CreatePoolStep({
             onChange={(e) => setClosesInSec(e.target.value)}
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          Rake (bps, max 1000)
-          <input
-            type="number"
-            min={0}
-            max={1000}
-            className="w-32 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground"
-            value={rakeBps}
-            onChange={(e) => setRakeBps(e.target.value)}
-          />
-        </label>
         <PrimaryButton
           type="button"
           size="sm"
@@ -310,7 +285,6 @@ function CreatePoolStep({
               setResult(
                 await createPoolAction({
                   closesInSec: Number(closesInSec),
-                  rakeBps: Number(rakeBps),
                 }),
               ),
             )
@@ -325,7 +299,7 @@ function CreatePoolStep({
       </div>
       <p className="text-xs text-muted-foreground">
         Keep the window short (e.g. 60s) so you can resolve without waiting
-        long. Suggested stake for the next step: {defaultAmount} {TOKEN_SYMBOL}.
+        long. The market has no minimum stake — any amount above 0 is accepted.
       </p>
       <Feedback result={result} />
     </div>
