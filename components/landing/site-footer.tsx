@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { LogoLockup } from "@/components/brand/logo";
+import { Copyright } from "lucide-react";
 
 const LINKS = [
   { href: "/board", label: "Board" },
@@ -10,6 +11,8 @@ const LINKS = [
 ] as const;
 
 export function SiteFooter() {
+  const currentYear = new Date().getFullYear();
+
   return (
     <footer className="border-t border-border bg-background">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
@@ -39,8 +42,14 @@ export function SiteFooter() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-6 font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-          <span>Prediction markets involve risk. $SACH is a utility token.</span>
-          <span>Unaudited · Testnet first</span>
+          <span>
+            Prediction markets involve risk. $SACH is a utility token.{" "}
+          </span>
+          {/* <span>Unaudited · Testnet first</span> */}
+
+          <span className="flex items-center jusify-start gap-1 text-[11px]">
+            <Copyright size={12} /> {currentYear}
+          </span>
         </div>
       </div>
     </footer>
