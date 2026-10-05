@@ -1,5 +1,6 @@
 import { getBoard } from "@/lib/pools";
 import { PoolCard } from "@/components/pools/pool-card";
+import GetSach from "@/components/common/get-sach";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,8 @@ export default async function BoardPage() {
         <p className="text-sm text-muted-foreground">
           Stake $SACH on the match result. Winners split the pot.
         </p>
+
+        <GetSach />
       </div>
 
       {pools.length === 0 ? (

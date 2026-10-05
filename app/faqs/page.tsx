@@ -6,6 +6,7 @@ import { NewToWeb3 } from "@/components/landing/new-to-web3";
 import { SiteFooter } from "@/components/landing/site-footer";
 import { RakeBps } from "@/components/common/rake-bps";
 import { FAQS } from "@/lib/faqs";
+import GetSach from "@/components/common/get-sach";
 
 const title = "FAQs";
 const description =
@@ -54,6 +55,8 @@ export default function FaqsPage() {
             </p>
             <div className="mt-6">
               <RakeBps />
+
+              <GetSach />
             </div>
           </div>
         </section>

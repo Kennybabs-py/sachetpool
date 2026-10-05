@@ -1,13 +1,4 @@
-import { PrimaryLink } from "@/components/common/primary-link";
-
-/**
- * Where to buy $SACH.
- *
- * TODO: paste the purchase link (DEX, bridge or on-ramp) between the quotes.
- * Until it is set, the section shows a placeholder marker instead of a dead
- * button, so a missing link can never ship as a broken CTA.
- */
-const BUY_SACH_URL = "";
+import GetSach from "../common/get-sach";
 
 const STEPS = [
   {
@@ -65,28 +56,7 @@ export function NewToWeb3() {
           ))}
         </ol>
 
-        <div className="mt-6 flex flex-wrap items-center gap-4 border border-border bg-muted/40 p-6">
-          <div>
-            <p className="text-sm font-medium">Get $SACH</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Buy the token, then send it to your own wallet on Robinhood Chain.
-            </p>
-          </div>
-          {BUY_SACH_URL ? (
-            <PrimaryLink
-              href={BUY_SACH_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="ml-auto"
-            >
-              Buy $SACH
-            </PrimaryLink>
-          ) : (
-            <span className="ml-auto border border-dashed border-border px-4 py-2 font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
-              Purchase link not set
-            </span>
-          )}
-        </div>
+        <GetSach />
 
         <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
           Never share your seed phrase. No legitimate site — including Sachet —
