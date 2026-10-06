@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import posthog from "posthog-js";
 import type { MatchCandidate, AdminPool } from "@/lib/pools";
 import type { OnchainOutcome } from "@/lib/onchain";
 import {
@@ -9,6 +10,11 @@ import {
   type ActionResult,
 } from "@/app/(app)/admin/actions";
 import { PrimaryButton } from "@/components/common/primary-button";
+
+const isPostHogConfigured = Boolean(
+  process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+    process.env.NEXT_PUBLIC_POSTHOG_HOST,
+);
 
 /**
  * Admin dashboard interactivity. Renders the "open a pool" queue and the
@@ -80,6 +86,9 @@ function OpenPoolSection({ candidates }: { candidates: MatchCandidate[] }) {
         matchId: selected.id,
         closesAt: closesAtSec,
       });
+      if (res.ok && isPostHogConfigured) {
+        posthog.capture("pool_opened", { league: selected.league });
+      }
       setResult(res);
     });
   }
@@ -198,6 +207,9 @@ function ResolveRow({ pool }: { pool: AdminPool }) {
                 poolId: pool.poolId,
                 outcome,
               });
+              if (res.ok && isPostHogConfigured) {
+                posthog.capture("pool_resolved", { outcome });
+              }
               setResult(res);
             })
           }

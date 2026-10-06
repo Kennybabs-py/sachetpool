@@ -1,9 +1,10 @@
 "use client";
 
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useEffect, useMemo, useRef } from "react";
 import { useTheme } from "next-themes";
 import { WagmiProvider } from "wagmi";
-import { SessionProvider } from "next-auth/react";
+import { SessionProvider, useSession } from "next-auth/react";
+import posthog from "posthog-js";
 import {
   darkTheme,
   lightTheme,
@@ -24,6 +25,45 @@ const getSiweMessageOptions: GetSiweMessageOptions = () => ({
 });
 
 const queryClient = new QueryClient();
+const isPostHogConfigured = Boolean(
+  process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+    process.env.NEXT_PUBLIC_POSTHOG_HOST,
+);
+
+/**
+ * Binds the browser PostHog client to the canonical SIWE wallet address once
+ * the NextAuth session has resolved. The SDK persists this identity across
+ * page navigation; reset clears it before a later wallet can use this browser.
+ */
+function PostHogIdentity() {
+  const { data: session, status } = useSession();
+  const identifiedAddress = useRef<string | null>(null);
+  const address = session?.address?.toLowerCase();
+
+  useEffect(() => {
+    if (!isPostHogConfigured || status === "loading") return;
+
+    const previousAddress = identifiedAddress.current;
+
+    if (!address) {
+      if (previousAddress) {
+        if (posthog.get_distinct_id() === previousAddress) posthog.reset();
+        identifiedAddress.current = null;
+      }
+      return;
+    }
+
+    if (previousAddress === address) return;
+
+    if (previousAddress && posthog.get_distinct_id() === previousAddress) {
+      posthog.reset();
+    }
+    posthog.identify(address);
+    identifiedAddress.current = address;
+  }, [address, status]);
+
+  return null;
+}
 
 /**
  * Client providers: wagmi + RainbowKit, NextAuth session, and the SIWE
@@ -58,6 +98,7 @@ export default function AppProvider({ children }: { children: ReactNode }) {
     <WagmiProvider config={rainbowkitConfig}>
       <QueryClientProvider client={queryClient}>
         <SessionProvider refetchInterval={0}>
+          <PostHogIdentity />
           <RainbowKitSiweNextAuthProvider
             getSiweMessageOptions={getSiweMessageOptions}
           >

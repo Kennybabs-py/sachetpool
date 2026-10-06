@@ -51,3 +51,4 @@ next-env.d.ts
 /contracts/lib
 
 /reference-app
+.env.local

@@ -1,5 +1,6 @@
 import { assertCronAuthorized } from "@/lib/cron-auth";
 import { settleFinishedMatches } from "@/lib/football-sync";
+import { logPostHog } from "@/lib/posthog-logs";
 import {
   FootballService,
   FootballApiError,
@@ -30,6 +31,13 @@ async function handle(req: Request) {
       ? new FootballService(provider)
       : FootballService.fromEnv();
     const result = await settleFinishedMatches(service);
+    await logPostHog("pool_settlement_completed", {
+      provider: result.provider,
+      checked: result.checked,
+      settled: result.settled,
+      voided: result.voided,
+      still_pending: result.stillPending,
+    });
     return Response.json({ ok: true, ...result });
   } catch (err) {
     if (err instanceof FootballApiError) {

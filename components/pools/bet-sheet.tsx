@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import type { Selection } from "@/generated/prisma/client";
 import type { PoolView } from "@/lib/pools";
 import { projectPayout } from "@/lib/odds";
@@ -43,6 +44,10 @@ const OUTCOMES: { key: Selection; label: string }[] = [
 ];
 
 const QUICK_STAKES = ["1", "5", "10", "25"];
+const isPostHogConfigured = Boolean(
+  process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+    process.env.NEXT_PUBLIC_POSTHOG_HOST,
+);
 
 type Phase = "idle" | "approving" | "betting" | "done";
 
@@ -165,6 +170,15 @@ export function BetSheet({
         ],
       });
       await publicClient.waitForTransactionReceipt({ hash: betHash });
+
+      if (isPostHogConfigured) {
+        posthog.capture("bet_placed", {
+          selection: active,
+          stake_amount: formatToken(amount, TOKEN_DECIMALS, 18),
+          token_symbol: TOKEN_SYMBOL,
+          required_token_approval: needsApproval,
+        });
+      }
 
       await Promise.all([refetchBalance(), refetchAllowance()]);
       setPhase("done");

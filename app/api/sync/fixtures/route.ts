@@ -1,5 +1,6 @@
 import { assertCronAuthorized } from "@/lib/cron-auth";
 import { syncFixtures } from "@/lib/football-sync";
+import { logPostHog } from "@/lib/posthog-logs";
 import {
   FootballService,
   FootballApiError,
@@ -60,6 +61,11 @@ export async function POST(req: Request) {
       ? new FootballService(provider)
       : FootballService.fromEnv();
     const result = await syncFixtures(service, { date, league, season });
+    await logPostHog("fixture_sync_completed", {
+      provider: result.provider,
+      fetched: result.fetched,
+      upserted: result.upserted,
+    });
     return Response.json({ ok: true, date, league, season, ...result });
   } catch (err) {
     if (err instanceof FootballApiError) {

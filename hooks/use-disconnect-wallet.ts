@@ -1,5 +1,11 @@
 import { signOut } from "next-auth/react";
+import posthog from "posthog-js";
 import { useConnection, useDisconnect } from "wagmi";
+
+const isPostHogConfigured = Boolean(
+  process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+    process.env.NEXT_PUBLIC_POSTHOG_HOST,
+);
 
 /**
  * End the wallet connection and the SIWE session together.
@@ -13,6 +19,8 @@ export function useDisconnectWallet() {
   const { disconnect } = useDisconnect();
 
   return async function disconnectWallet() {
+    // Clear the persisted identity before navigation ends this client session.
+    if (isPostHogConfigured) posthog.reset();
     if (isConnected) disconnect();
     await signOut({ callbackUrl: "/" });
   };

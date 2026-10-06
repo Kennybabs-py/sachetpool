@@ -2,11 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { MARKET_ADDRESS } from "@/config/chains";
 import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
 import { PrimaryButton } from "@/components/common/primary-button";
+
+const isPostHogConfigured = Boolean(
+  process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+    process.env.NEXT_PUBLIC_POSTHOG_HOST,
+);
 
 /**
  * Pull-payment trigger for a resolved bet. Winners (and void refundees) call
@@ -37,6 +43,9 @@ export function ClaimButton({ onchainPoolId }: { onchainPoolId: string }) {
         args: [onchainPoolId as `0x${string}`],
       });
       await publicClient.waitForTransactionReceipt({ hash });
+      if (isPostHogConfigured) {
+        posthog.capture("payout_claimed");
+      }
       router.refresh();
     } catch (err) {
       setError(
