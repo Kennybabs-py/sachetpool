@@ -37,7 +37,11 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const date = body.date ?? new Date().toISOString().slice(0, 10);
+  // const date = body.date ?? new Date().toISOString().slice(0, 10);
+  const currentDate = new Date();
+  currentDate.setDate(currentDate.getDate() + 4);
+  const date = body?.date ?? currentDate.toISOString().slice(0, 10);
+
   const { league, season, provider } = body;
 
   if (league === undefined || league === null || league === "") {
