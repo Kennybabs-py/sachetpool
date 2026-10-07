@@ -43,6 +43,7 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
      * @param poolAway Total tokens wagered on the AWAY outcome
      * @param totalPool The total aggregated tokens wagered across all outcomes
      * @param totalClaimed Tracks total payouts claimed from this pool (useful for UI/Analytics)
+     * @param rakeBps The snapshotted rake basis points for this pool
      */
     struct Pool {
         uint64 expiresAt;
@@ -53,6 +54,7 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
         uint256 poolAway;
         uint256 totalPool;
         uint256 totalClaimed;
+        uint256 rakeBps;
     }
 
     /**
@@ -188,6 +190,7 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
         Pool storage r = pools[poolId];
         r.expiresAt = expiresAt;
         r.status = PoolStatus.OPEN;
+        r.rakeBps = rakeBps;
         // Other fields default to 0/UNSET
 
         emit PoolLaunched(poolId, expiresAt);
@@ -336,7 +339,7 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
                 winningPool = r.poolAway;
             }
 
-            uint256 distributablePot = r.totalPool - ((r.totalPool * rakeBps) / 10000);
+            uint256 distributablePot = r.totalPool - ((r.totalPool * r.rakeBps) / 10000);
 
             if (b.outcome != result) {
                 payout = 0;
