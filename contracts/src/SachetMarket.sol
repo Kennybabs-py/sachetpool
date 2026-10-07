@@ -123,6 +123,8 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
     error AmountExceedsBalance();
     /// @notice Thrown when a user attempts to change their bet outcome without withdrawing first
     error CannotChangeOutcome();
+    /// @notice Thrown when attempting to change the market token without sweeping funds first
+    error SweepFirst();
 
     /// @notice Maximum allowed duration between pool creation and expiry
     uint256 public constant MAX_POOL_DURATION = 30 days;
@@ -368,6 +370,7 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
      */
     function updateToken(address newToken) external onlyRole(ADMIN_ROLE) whenPaused {
         if (newToken == address(0)) revert ZeroAddress();
+        if (sachetMarketToken.balanceOf(address(this)) != 0) revert SweepFirst();
         address oldToken = address(sachetMarketToken);
         sachetMarketToken = IERC20(newToken);
         emit TokenUpdated(oldToken, newToken);
