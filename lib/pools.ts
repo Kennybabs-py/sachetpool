@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "./prisma";
 import { PoolStatus, Selection } from "@/generated/prisma/client";
 import { impliedMultiple } from "./odds";
+import { toAmountString, toBigInt, type DecimalLike } from "./amounts";
 import { publicClient } from "./chain/server-client";
 import { sachetMarketAbi } from "./contracts/sachet-market";
 import { MARKET_ADDRESS } from "@/config/chains";
@@ -74,10 +75,10 @@ type PoolRow = {
   status: PoolStatus;
   closesAt: Date;
   rakeBps: number;
-  totalStake: bigint;
-  stakeHome: bigint;
-  stakeDraw: bigint;
-  stakeAway: bigint;
+  totalStake: DecimalLike;
+  stakeHome: DecimalLike;
+  stakeDraw: DecimalLike;
+  stakeAway: DecimalLike;
   winningSelection: Selection | null;
   createTxHash: string | null;
   resolvedTxHash: string | null;
@@ -94,10 +95,11 @@ type PoolRow = {
 };
 
 function toView(pool: PoolRow, now: Date = new Date()): PoolView {
+  const totalStake = toBigInt(pool.totalStake);
   const stakes: Record<Selection, bigint> = {
-    HOME: pool.stakeHome,
-    DRAW: pool.stakeDraw,
-    AWAY: pool.stakeAway,
+    HOME: toBigInt(pool.stakeHome),
+    DRAW: toBigInt(pool.stakeDraw),
+    AWAY: toBigInt(pool.stakeAway),
   };
   const rakeBps = pool.rakeBps;
   return {
@@ -113,16 +115,16 @@ function toView(pool: PoolRow, now: Date = new Date()): PoolView {
     closesAt: pool.closesAt,
     status: effectiveStatus(pool.status, pool.closesAt, now),
     rakeBps,
-    totalStake: pool.totalStake.toString(),
+    totalStake: toAmountString(pool.totalStake),
     stakeBySelection: {
       HOME: stakes.HOME.toString(),
       DRAW: stakes.DRAW.toString(),
       AWAY: stakes.AWAY.toString(),
     },
     oddsBySelection: {
-      HOME: impliedMultiple(pool.totalStake, stakes.HOME, rakeBps),
-      DRAW: impliedMultiple(pool.totalStake, stakes.DRAW, rakeBps),
-      AWAY: impliedMultiple(pool.totalStake, stakes.AWAY, rakeBps),
+      HOME: impliedMultiple(totalStake, stakes.HOME, rakeBps),
+      DRAW: impliedMultiple(totalStake, stakes.DRAW, rakeBps),
+      AWAY: impliedMultiple(totalStake, stakes.AWAY, rakeBps),
     },
     winningSelection: pool.winningSelection,
     homeScore: pool.match.homeScore,
@@ -282,7 +284,7 @@ export async function listAdminPools(
     homeTeam: p.match.homeTeam,
     awayTeam: p.match.awayTeam,
     league: p.match.league,
-    totalStake: p.totalStake.toString(),
+    totalStake: toAmountString(p.totalStake),
     isExpired: p.closesAt.getTime() <= now.getTime(),
   }));
 }

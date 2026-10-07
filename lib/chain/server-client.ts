@@ -1,7 +1,7 @@
 import "server-only";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
-import { chain, RPC_URL } from "@/config/chains";
+import { chain, INDEXER_RPC_URL, RPC_URL } from "@/config/chains";
 
 /**
  * Server-side viem clients bound to Robinhood Chain.
@@ -14,6 +14,20 @@ import { chain, RPC_URL } from "@/config/chains";
 export const publicClient = createPublicClient({
   chain,
   transport: http(RPC_URL),
+});
+
+/**
+ * Indexer reads (`eth_getLogs`, block number, market `getPool`) go through a
+ * dedicated transport that can point at a wider-range provider, isolated from
+ * the app's read path. Retries are generous because backfills are long.
+ */
+export const indexerClient = createPublicClient({
+  chain,
+  transport: http(INDEXER_RPC_URL, {
+    retryCount: 5,
+    retryDelay: 500,
+    timeout: 60_000,
+  }),
 });
 
 function normaliseKey(key: string): `0x${string}` {

@@ -107,10 +107,12 @@ model Pool {
   rakeBps          Int         @default(0)
   createdBy        String?
   createTxHash     String?
-  totalStake       BigInt      @default(0)
-  stakeHome        BigInt      @default(0)
-  stakeDraw        BigInt      @default(0)
-  stakeAway        BigInt      @default(0)
+  /// `numeric(78, 0)`: token amounts are uint256-scale and overflow postgres
+  /// `bigint` past ~9.22 tokens at 18 decimals, so they are stored as decimal.
+  totalStake       Decimal     @default(0) @db.Decimal(78, 0)
+  stakeHome        Decimal     @default(0) @db.Decimal(78, 0)
+  stakeDraw        Decimal     @default(0) @db.Decimal(78, 0)
+  stakeAway        Decimal     @default(0) @db.Decimal(78, 0)
   winningSelection Selection?
   resolvedTxHash   String?
   settledAt        DateTime?
@@ -135,10 +137,10 @@ model Bet {
   /// Lowercase address that placed the bet (denormalised for history reads).
   address     String
   selection   Selection
-  /// Current live stake; 0 once withdrawn.
-  amount      BigInt
+  /// Current live stake; 0 once withdrawn. uint256-scale (see `Pool.totalStake`).
+  amount      Decimal   @db.Decimal(78, 0)
   status      BetStatus @default(PENDING)
-  payout      BigInt    @default(0)
+  payout      Decimal   @default(0) @db.Decimal(78, 0)
   /// True once the on-chain `claim` marked the bet settled.
   claimed     Boolean   @default(false)
   /// Last event that touched this stake (place, top-up, or withdraw).

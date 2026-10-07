@@ -26,6 +26,7 @@ import {
 import { getGlobalRakeBps } from "./pools";
 import { formatToken, parseToken } from "./format";
 import { winnerPayout } from "./odds";
+import { toAmountString, toBigInt } from "./amounts";
 import { MARKET_ADDRESS, TOKEN_DECIMALS, TOKEN_SYMBOL } from "@/config/chains";
 
 /**
@@ -158,10 +159,10 @@ export async function getSandboxState(): Promise<SandboxState> {
           closesAtMs: pool.closesAt.getTime(),
           createTxHash: pool.createTxHash,
           resolvedTxHash: pool.resolvedTxHash,
-          totalStake: pool.totalStake.toString(),
-          stakeHome: pool.stakeHome.toString(),
-          stakeDraw: pool.stakeDraw.toString(),
-          stakeAway: pool.stakeAway.toString(),
+          totalStake: toAmountString(pool.totalStake),
+          stakeHome: toAmountString(pool.stakeHome),
+          stakeDraw: toAmountString(pool.stakeDraw),
+          stakeAway: toAmountString(pool.stakeAway),
           winningSelection: pool.winningSelection,
           isExpired: pool.closesAt.getTime() <= now,
         }
@@ -170,8 +171,8 @@ export async function getSandboxState(): Promise<SandboxState> {
       id: bet.id,
       address: bet.address,
       selection: bet.selection,
-      amount: bet.amount.toString(),
-      payout: bet.payout.toString(),
+      amount: toAmountString(bet.amount),
+      payout: toAmountString(bet.payout),
       status: bet.status,
       claimed: bet.claimed,
       txHash: bet.txHash,
@@ -325,10 +326,10 @@ export async function placeDummyBet(input: {
     await prisma.bet.update({
       where: { id: existing.id },
       data: {
-        amount: restart ? amount : { increment: amount },
+        amount: restart ? amount.toString() : { increment: amount.toString() },
         selection,
         status: BetStatus.PENDING,
-        payout: 0n,
+        payout: "0",
         claimed: false,
         txHash: receipt.hash,
         logIndex: receipt.logIndex,
@@ -342,7 +343,7 @@ export async function placeDummyBet(input: {
         userId: user.id,
         address: operatorAddress,
         selection,
-        amount,
+        amount: amount.toString(),
         status: BetStatus.PENDING,
         txHash: receipt.hash,
         logIndex: receipt.logIndex,
@@ -361,8 +362,8 @@ export async function placeDummyBet(input: {
   await prisma.pool.update({
     where: { id: pool.id },
     data: {
-      totalStake: { increment: amount },
-      [stakeField]: { increment: amount },
+      totalStake: { increment: amount.toString() },
+      [stakeField]: { increment: amount.toString() },
     },
   });
 
@@ -402,11 +403,11 @@ export async function resolveDummyPool(input: {
   const selection = codeToSelection(code);
   const winningStake =
     selection === Selection.HOME
-      ? pool.stakeHome
+      ? toBigInt(pool.stakeHome)
       : selection === Selection.DRAW
-        ? pool.stakeDraw
+        ? toBigInt(pool.stakeDraw)
         : selection === Selection.AWAY
-          ? pool.stakeAway
+          ? toBigInt(pool.stakeAway)
           : 0n;
   const refundMode = selection === null || winningStake === 0n;
   const status =
@@ -430,25 +431,25 @@ export async function resolveDummyPool(input: {
     if (refundMode) {
       await prisma.bet.update({
         where: { id: bet.id },
-        data: { status: BetStatus.VOID, payout: bet.amount },
+        data: { status: BetStatus.VOID, payout: toAmountString(bet.amount) },
       });
       continue;
     }
     if (bet.selection === selection) {
       const payout = winnerPayout(
-        pool.totalStake,
-        bet.amount,
+        toBigInt(pool.totalStake),
+        toBigInt(bet.amount),
         winningStake,
         pool.rakeBps,
       );
       await prisma.bet.update({
         where: { id: bet.id },
-        data: { status: BetStatus.WON, payout },
+        data: { status: BetStatus.WON, payout: payout.toString() },
       });
     } else {
       await prisma.bet.update({
         where: { id: bet.id },
-        data: { status: BetStatus.LOST, payout: 0n },
+        data: { status: BetStatus.LOST, payout: "0" },
       });
     }
   }

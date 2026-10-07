@@ -8,6 +8,7 @@ const envMap: Record<string, string> = {
 
   NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL as string,
   RPC_URL: process.env.RPC_URL as string,
+  INDEXER_RPC_URL: process.env.INDEXER_RPC_URL as string,
 
   NEXT_PUBLIC_EXPLORER_URL: process.env.NEXT_PUBLIC_EXPLORER_URL as string,
   EXPLORER_URL: process.env.EXPLORER_URL as string,
@@ -65,6 +66,13 @@ export const CHAIN_NAME =
 
 export const RPC_URL =
   firstEnv("NEXT_PUBLIC_RPC_URL", "RPC_URL") ?? "http://127.0.0.1:8545";
+
+/**
+ * RPC used by the server-side indexer. Defaults to `RPC_URL`, but a provider
+ * with a wider `eth_getLogs` block span (and no per-request cap) can be set
+ * here so a backfill needs far fewer calls than a throttled free tier allows.
+ */
+export const INDEXER_RPC_URL = firstEnv("INDEXER_RPC_URL") ?? RPC_URL;
 
 export const EXPLORER_URL = firstEnv(
   "NEXT_PUBLIC_EXPLORER_URL",

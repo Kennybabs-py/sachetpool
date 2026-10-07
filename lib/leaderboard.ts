@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "./prisma";
+import { toBigInt } from "./amounts";
 import { BetStatus } from "@/generated/prisma/client";
 import {
   rankLeaderboard,
@@ -53,8 +54,8 @@ export async function getLeaderboard(
     userId: r.userId,
     status: r.status === BetStatus.LOST ? "LOST" : "WON",
     count: r._count,
-    stake: r._sum.amount ?? 0n,
-    payout: r._sum.payout ?? 0n,
+    stake: toBigInt(r._sum.amount),
+    payout: toBigInt(r._sum.payout),
   }));
 
   const ranked = rankLeaderboard(statRows, { minSettledBets, limit });
@@ -90,8 +91,8 @@ export async function getUserStanding(
     userId: address.toLowerCase(),
     status: r.status === BetStatus.LOST ? "LOST" : "WON",
     count: r._count,
-    stake: r._sum.amount ?? 0n,
-    payout: r._sum.payout ?? 0n,
+    stake: toBigInt(r._sum.amount),
+    payout: toBigInt(r._sum.payout),
   }));
 
   const summary = summarizeUser(statRows);

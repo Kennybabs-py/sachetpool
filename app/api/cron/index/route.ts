@@ -21,5 +21,9 @@ async function handle(req: Request) {
   }
 }
 
+// A run drains a bounded block budget; give it room above the platform default
+// so a backlog catches up faster. Clamped by the host if the plan caps lower.
+export const maxDuration = 60;
+
 export const POST = handle;
 export const GET = handle;

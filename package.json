@@ -15,6 +15,7 @@
     "export:abi": "node scripts/export-abi.mjs",
     "brand:assets": "node scripts/generate-brand-assets.mjs",
     "deploy:market": "tsx scripts/deploy-market.ts",
+    "indexer:backfill": "tsx --tsconfig scripts/tsconfig.json scripts/backfill-indexer.ts",
     "forge:test": "forge test --root contracts",
     "postinstall": "prisma generate"
   },

@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "./prisma";
+import { toAmountString } from "./amounts";
 import {
   BetStatus,
   PoolStatus,
@@ -48,9 +49,9 @@ export async function listUserBets(address: string): Promise<UserBetView[]> {
     poolId: bet.poolId,
     onchainPoolId: bet.pool.onchainPoolId,
     selection: bet.selection,
-    amount: bet.amount.toString(),
+    amount: toAmountString(bet.amount),
     status: bet.status,
-    payout: bet.payout.toString(),
+    payout: toAmountString(bet.payout),
     claimed: bet.claimed,
     txHash: bet.txHash,
     claimTxHash: bet.claimTxHash,

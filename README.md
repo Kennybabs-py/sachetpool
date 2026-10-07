@@ -178,13 +178,17 @@ Copy `.env.example`. Server-only names and their browser-visible
 | `CRON_SECRET` | Bearer/query secret guarding `/api/cron/*` and `/api/sync/*`. |
 | `CHAIN_ID`, `CHAIN_NAME`, `RPC_URL`, `EXPLORER_URL` | Robinhood Chain endpoint and metadata. |
 | `SACH_TOKEN_ADDRESS`, `SACH_TOKEN_DECIMALS` | The ERC-20 the market escrows. |
-| `MARKET_ADDRESS`, `MARKET_DEPLOY_BLOCK` | Deployed `SachetMarket` and indexer start block. |
+| `MARKET_ADDRESS`, `MARKET_DEPLOY_BLOCK` | Deployed `SachetMarket` and indexer start block (must be the real deploy block, not `0`). |
 | `TREASURY_ADDRESS` | Recipient of swept rake (contract constructor arg). |
 | `OPERATOR_PRIVATE_KEY` | Server hot key that signs `createPool`/`resolve`/`withdrawTreasury`. |
 | `DEPLOYER_PRIVATE_KEY` | One-shot key used by `yarn deploy:market`. |
 | `ADMIN_ADDRESSES` | CSV allowlist of wallets permitted to open/resolve pools. |
 | `MIN_STAKE` | Contract minimum stake in base units (e.g. `1000000000000000000` = 1 $SACH). |
 | `INDEXER_CONFIRMATIONS` | Reorg safety margin for the indexer (default `5`). |
+| `INDEXER_RPC_URL` | Optional wide-range RPC for `eth_getLogs` (defaults to `RPC_URL`). Alchemy's free tier caps log ranges at 10 blocks; the chain's official/public RPCs serve 10k+, so a backfill needs ~1000× fewer requests. |
+| `INDEXER_BLOCK_RANGE` | Max blocks per `eth_getLogs` call (default `10`; set `10000` for the official RPC). |
+| `INDEXER_MAX_BLOCKS_PER_RUN` | Blocks a single cron run advances; the cursor drains any remainder (default `BLOCK_RANGE × 100`). |
+| `INDEXER_CONCURRENCY` | Parallel log chunks per round (default `8`; Alchemy free tier 429s above ~10). |
 | `NEXT_PUBLIC_*` | Browser mirrors of chain id/name/rpc/explorer/token/market + `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`. |
 
 `config/chains.ts` falls back to local anvil defaults (`31337`,
@@ -215,6 +219,18 @@ yarn db:migrate     # prisma migrate dev
 yarn db:generate    # regenerate client into generated/prisma (gitignored)
 yarn db:push        # push schema without a migration (prototyping)
 yarn db:pull        # introspect an existing DB
+```
+
+Money columns (`Pool.totalStake`/`stakeHome`/`stakeDraw`/`stakeAway`,
+`Bet.amount`/`payout`) are `numeric(78, 0)`: token amounts are uint256-scale and
+overflow postgres `bigint` past ~9.22 tokens at 18 decimals. `lib/amounts.ts`
+converts between Prisma `Decimal` and the app's `bigint` arithmetic.
+
+The cron indexer (`/api/cron/index`) drains a bounded block budget per run and
+persists progress in `ChainCursor`. To drain a large backlog immediately:
+
+```bash
+yarn indexer:backfill   # loops the same indexer until caught up (idempotent)
 ```
 
 The initial migration lives at

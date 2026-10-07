@@ -2,11 +2,12 @@ import "server-only";
 import { parseEventLogs } from "viem";
 import type { Address, Hash } from "viem";
 import { prisma } from "./prisma";
-import { publicClient } from "./chain/server-client";
+import { indexerClient } from "./chain/server-client";
 import { sachetMarketAbi } from "./contracts/sachet-market";
 import { chain, MARKET_ADDRESS, MARKET_DEPLOY_BLOCK } from "@/config/chains";
 import { codeToSelection } from "./onchain";
 import { winnerPayout } from "./odds";
+import { toAmountString, toBigInt } from "./amounts";
 import {
   BetStatus,
   PoolStatus,
@@ -17,17 +18,45 @@ import {
 /**
  * Chain → Postgres mirror.
  *
- * Reads `ChainCursor`, pulls `SachetMarket` logs from `lastBlock + 1` up to
- * `latest − INDEXER_CONFIRMATIONS`, and applies them in order. Handlers are
- * idempotent and each raw log is also recorded in `ChainEvent`, so a crash
- * mid-run simply replays safely on the next invocation.
+ * Reads `ChainCursor` and pulls `SachetMarket` logs from `lastBlock + 1` up to
+ * `latest − INDEXER_CONFIRMATIONS`, applying them in order. The chain is always
+ * the source of truth; this mirror only feeds reads.
  *
- * The chain is always the source of truth; this mirror only feeds reads.
+ * Providers cap `eth_getLogs` to a small block span (Alchemy's free tier allows
+ * 10 blocks), so a run is split into fixed-size chunks rather than one
+ * unbounded query. Each invocation also has a block budget: a large backlog is
+ * drained across several runs, while progress is persisted in `ChainCursor`.
+ * Handlers are idempotent and every raw log is recorded in `ChainEvent`, so a
+ * crash or a retried chunk replays safely.
  */
 
 const CONFIRMATIONS = (() => {
   const raw = Number(process.env.INDEXER_CONFIRMATIONS);
   return Number.isFinite(raw) && raw >= 0 ? raw : 5;
+})();
+
+/** Max blocks per `eth_getLogs` call (Alchemy free tier: 10). */
+const BLOCK_RANGE = (() => {
+  const raw = Number(process.env.INDEXER_BLOCK_RANGE);
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 10;
+})();
+
+/**
+ * Max blocks a single invocation advances. Keeps a backlog drain within the
+ * serverless time budget; the cursor carries the rest to the next run.
+ */
+const MAX_BLOCKS_PER_RUN = (() => {
+  const raw = Number(process.env.INDEXER_MAX_BLOCKS_PER_RUN);
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : BLOCK_RANGE * 100;
+})();
+
+/**
+ * Chunks fetched in parallel on each round. Kept low: Alchemy's free tier
+ * returns 429 past ~10 in-flight `eth_getLogs` calls.
+ */
+const CONCURRENCY = (() => {
+  const raw = Number(process.env.INDEXER_CONCURRENCY);
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 8;
 })();
 
 export interface IndexResult {
@@ -36,6 +65,8 @@ export interface IndexResult {
   latestBlock: string;
   processed: number;
   skipped: number;
+  /** True when the mirror has caught up to `latest − confirmations`. */
+  caughtUp: boolean;
 }
 
 interface DecodedLog {
@@ -70,7 +101,7 @@ function cursorId(): string {
 async function readPoolRakeBps(poolId: string): Promise<number | null> {
   if (!MARKET_ADDRESS) return null;
   try {
-    const pool = await publicClient.readContract({
+    const pool = await indexerClient.readContract({
       address: MARKET_ADDRESS as Address,
       abi: sachetMarketAbi,
       functionName: "getPool",
@@ -130,10 +161,10 @@ async function handleBetPlaced(args: Record<string, unknown>, log: DecodedLog) {
     await prisma.bet.update({
       where: { id: existing.id },
       data: {
-        amount: restart ? amount : { increment: amount },
+        amount: restart ? amount.toString() : { increment: amount.toString() },
         selection,
         status: BetStatus.PENDING,
-        payout: 0n,
+        payout: "0",
         claimed: false,
         txHash,
         logIndex,
@@ -147,7 +178,7 @@ async function handleBetPlaced(args: Record<string, unknown>, log: DecodedLog) {
         userId: user.id,
         address: bettor,
         selection,
-        amount,
+        amount: amount.toString(),
         status: BetStatus.PENDING,
         txHash,
         logIndex,
@@ -166,8 +197,8 @@ async function handleBetPlaced(args: Record<string, unknown>, log: DecodedLog) {
   await prisma.pool.update({
     where: { id: pool.id },
     data: {
-      totalStake: { increment: amount },
-      [stakeField]: { increment: amount },
+      totalStake: { increment: amount.toString() },
+      [stakeField]: { increment: amount.toString() },
     },
   });
 }
@@ -191,7 +222,7 @@ async function handleBetWithdrawn(args: Record<string, unknown>) {
 
   await prisma.bet.update({
     where: { id: bet.id },
-    data: { amount: 0n, status: BetStatus.WITHDRAWN, payout: 0n },
+    data: { amount: "0", status: BetStatus.WITHDRAWN, payout: "0" },
   });
 
   const stakeField: "stakeHome" | "stakeDraw" | "stakeAway" =
@@ -204,8 +235,8 @@ async function handleBetWithdrawn(args: Record<string, unknown>) {
   await prisma.pool.update({
     where: { id: pool.id },
     data: {
-      totalStake: { decrement: amount },
-      [stakeField]: { decrement: amount },
+      totalStake: { decrement: amount.toString() },
+      [stakeField]: { decrement: amount.toString() },
     },
   });
 }
@@ -230,7 +261,7 @@ async function handlePoolCancelled(args: Record<string, unknown>) {
   for (const bet of pending) {
     await prisma.bet.update({
       where: { id: bet.id },
-      data: { status: BetStatus.VOID, payout: bet.amount },
+      data: { status: BetStatus.VOID, payout: toAmountString(bet.amount) },
     });
   }
 }
@@ -271,10 +302,10 @@ async function handlePoolResolved(
 
   const winningStake =
     selection === Selection.HOME
-      ? pool.stakeHome
+      ? toBigInt(pool.stakeHome)
       : selection === Selection.DRAW
-        ? pool.stakeDraw
-        : pool.stakeAway;
+        ? toBigInt(pool.stakeDraw)
+        : toBigInt(pool.stakeAway);
 
   const bets = await prisma.bet.findMany({
     where: { poolId: pool.id, status: BetStatus.PENDING },
@@ -284,25 +315,25 @@ async function handlePoolResolved(
     if (refundMode) {
       await prisma.bet.update({
         where: { id: bet.id },
-        data: { status: BetStatus.VOID, payout: bet.amount },
+        data: { status: BetStatus.VOID, payout: toAmountString(bet.amount) },
       });
       continue;
     }
     if (bet.selection === selection) {
       const payout = winnerPayout(
-        pool.totalStake,
-        bet.amount,
+        toBigInt(pool.totalStake),
+        toBigInt(bet.amount),
         winningStake,
         pool.rakeBps,
       );
       await prisma.bet.update({
         where: { id: bet.id },
-        data: { status: BetStatus.WON, payout },
+        data: { status: BetStatus.WON, payout: payout.toString() },
       });
     } else {
       await prisma.bet.update({
         where: { id: bet.id },
-        data: { status: BetStatus.LOST, payout: 0n },
+        data: { status: BetStatus.LOST, payout: "0" },
       });
     }
   }
@@ -357,42 +388,18 @@ async function applyLog(log: DecodedLog) {
 
 // ── Runner ─────────────────────────────────────────────────────────────────
 
-/**
- * Pull and apply all newly-finalized logs. Safe to run on a tight schedule:
- * a no-op when there is nothing new. Throws if `MARKET_ADDRESS` is unset.
- */
-export async function runIndexer(): Promise<IndexResult> {
-  if (!MARKET_ADDRESS) {
-    throw new Error("MARKET_ADDRESS is not configured");
-  }
-  const address = MARKET_ADDRESS as Address;
+interface FetchedChunk {
+  rawCount: number;
+  decoded: DecodedLog[];
+}
 
-  const latest = await publicClient.getBlockNumber();
-  const safe = latest - BigInt(CONFIRMATIONS);
-
-  const id = cursorId();
-  const cursor = await prisma.chainCursor.findUnique({ where: { id } });
-
-  const startBlock = cursor
-    ? cursor.lastBlock + 1n
-    : BigInt(MARKET_DEPLOY_BLOCK);
-
-  if (safe < startBlock) {
-    return {
-      fromBlock: startBlock.toString(),
-      toBlock: safe.toString(),
-      latestBlock: latest.toString(),
-      processed: 0,
-      skipped: 0,
-    };
-  }
-
-  const rawLogs = await publicClient.getLogs({
-    address,
-    fromBlock: startBlock,
-    toBlock: safe,
-  });
-
+/** Fetch and decode one `eth_getLogs` window, in chain order. */
+async function fetchChunk(
+  address: Address,
+  fromBlock: bigint,
+  toBlock: bigint,
+): Promise<FetchedChunk> {
+  const rawLogs = await indexerClient.getLogs({ address, fromBlock, toBlock });
   const decoded = parseEventLogs({
     abi: sachetMarketAbi,
     logs: rawLogs,
@@ -407,6 +414,14 @@ export async function runIndexer(): Promise<IndexResult> {
     return (a.logIndex ?? 0) - (b.logIndex ?? 0);
   });
 
+  return { rawCount: rawLogs.length, decoded };
+}
+
+/** Apply a chunk's logs in order. Idempotent: each raw log is deduped. */
+async function applyChunk(
+  address: Address,
+  decoded: DecodedLog[],
+): Promise<number> {
   let processed = 0;
   for (const log of decoded) {
     const txHash = log.transactionHash;
@@ -433,18 +448,93 @@ export async function runIndexer(): Promise<IndexResult> {
     });
     processed++;
   }
+  return processed;
+}
 
-  await prisma.chainCursor.upsert({
-    where: { id },
-    update: { lastBlock: safe },
-    create: { id, lastBlock: safe },
-  });
+/**
+ * Pull and apply newly-finalized logs in fixed-size, bounded chunks. Safe to
+ * run on a tight schedule: a no-op when there is nothing new. Advances the
+ * cursor only past fully-applied chunks, so an interrupted run resumes cleanly.
+ * Throws if `MARKET_ADDRESS` is unset.
+ */
+export async function runIndexer(): Promise<IndexResult> {
+  if (!MARKET_ADDRESS) {
+    throw new Error("MARKET_ADDRESS is not configured");
+  }
+  const address = MARKET_ADDRESS as Address;
+
+  const latest = await indexerClient.getBlockNumber();
+  const safe = latest - BigInt(CONFIRMATIONS);
+
+  const id = cursorId();
+  const cursor = await prisma.chainCursor.findUnique({ where: { id } });
+
+  const startBlock = cursor
+    ? cursor.lastBlock + 1n
+    : BigInt(MARKET_DEPLOY_BLOCK);
+
+  if (safe < startBlock) {
+    return {
+      fromBlock: startBlock.toString(),
+      toBlock: safe.toString(),
+      latestBlock: latest.toString(),
+      processed: 0,
+      skipped: 0,
+      caughtUp: true,
+    };
+  }
+
+  // Bound this run; the cursor carries any remaining backlog to the next one.
+  const budgetEnd = startBlock + BigInt(MAX_BLOCKS_PER_RUN) - 1n;
+  const windowEnd = budgetEnd < safe ? budgetEnd : safe;
+
+  const chunks: [bigint, bigint][] = [];
+  for (let from = startBlock; from <= windowEnd; from += BigInt(BLOCK_RANGE)) {
+    const to = from + BigInt(BLOCK_RANGE) - 1n;
+    chunks.push([from, to > windowEnd ? windowEnd : to]);
+  }
+
+  let processed = 0;
+  let skipped = 0;
+  let lastBlock = startBlock - 1n;
+
+  for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+    const batch = chunks.slice(i, i + CONCURRENCY);
+
+    let fetched: FetchedChunk[];
+    try {
+      fetched = await Promise.all(
+        batch.map(([from, to]) => fetchChunk(address, from, to)),
+      );
+    } catch (err) {
+      // Keep the position at the last fully-applied chunk. The cursor is not
+      // advanced past this point, so the next run replays the failed batch.
+      if (lastBlock < startBlock) throw err;
+      break;
+    }
+
+    for (let j = 0; j < batch.length; j++) {
+      const { rawCount, decoded } = fetched[j];
+      processed += await applyChunk(address, decoded);
+      skipped += rawCount - decoded.length;
+      lastBlock = batch[j][1];
+    }
+  }
+
+  if (lastBlock >= startBlock) {
+    await prisma.chainCursor.upsert({
+      where: { id },
+      update: { lastBlock },
+      create: { id, lastBlock },
+    });
+  }
 
   return {
     fromBlock: startBlock.toString(),
-    toBlock: safe.toString(),
+    toBlock: lastBlock.toString(),
     latestBlock: latest.toString(),
     processed,
-    skipped: rawLogs.length - decoded.length,
+    skipped,
+    caughtUp: lastBlock >= safe,
   };
 }
