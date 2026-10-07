@@ -33,10 +33,12 @@ export interface ViewerStanding extends UserStanding {
   qualified: boolean;
 }
 
-export async function getLeaderboard(opts: {
-  minSettledBets?: number;
-  limit?: number;
-} = {}): Promise<RankedPlayer[]> {
+export async function getLeaderboard(
+  opts: {
+    minSettledBets?: number;
+    limit?: number;
+  } = {},
+): Promise<RankedPlayer[]> {
   const minSettledBets = opts.minSettledBets ?? MIN_SETTLED_BETS;
   const limit = opts.limit ?? LEADERBOARD_SIZE;
 

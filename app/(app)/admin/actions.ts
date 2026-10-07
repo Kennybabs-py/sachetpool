@@ -11,6 +11,7 @@ import {
   type OnchainOutcome,
 } from "@/lib/onchain";
 import { launchPool, resolvePool } from "@/lib/market";
+import { getGlobalRakeBps } from "@/lib/pools";
 
 /**
  * Admin dashboard server actions.
@@ -58,6 +59,9 @@ export async function openPoolAction(input: {
   }
 
   const onchainPoolId = computeOnchainPoolId(match.externalId);
+  // The contract snapshots the global rake at launch; seed the row with the
+  // current value so odds are right before the indexer reconciles it.
+  const rakeBps = await getGlobalRakeBps();
 
   const pool = await prisma.pool.create({
     data: {
@@ -66,6 +70,7 @@ export async function openPoolAction(input: {
       type: PoolType.RESULT_1X2,
       status: PoolStatus.PENDING_ONCHAIN,
       closesAt: new Date(closesAt * 1000),
+      rakeBps,
       createdBy: address,
     },
     select: { id: true },

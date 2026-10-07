@@ -102,6 +102,9 @@ model Pool {
   status           PoolStatus  @default(PENDING_ONCHAIN)
   /// Selection expiry; betting is rejected on-chain from this instant.
   closesAt         DateTime
+  /// Rake snapshotted on-chain at launch (basis points); the contract pays
+  /// winners using this, not the current global rake, so the mirror stores it.
+  rakeBps          Int         @default(0)
   createdBy        String?
   createTxHash     String?
   totalStake       BigInt      @default(0)

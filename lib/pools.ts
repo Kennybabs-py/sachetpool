@@ -73,6 +73,7 @@ type PoolRow = {
   onchainPoolId: string;
   status: PoolStatus;
   closesAt: Date;
+  rakeBps: number;
   totalStake: bigint;
   stakeHome: bigint;
   stakeDraw: bigint;
@@ -92,16 +93,13 @@ type PoolRow = {
   };
 };
 
-function toView(
-  pool: PoolRow,
-  rakeBps: number,
-  now: Date = new Date(),
-): PoolView {
+function toView(pool: PoolRow, now: Date = new Date()): PoolView {
   const stakes: Record<Selection, bigint> = {
     HOME: pool.stakeHome,
     DRAW: pool.stakeDraw,
     AWAY: pool.stakeAway,
   };
+  const rakeBps = pool.rakeBps;
   return {
     poolId: pool.id,
     matchId: pool.matchId,
@@ -138,19 +136,16 @@ function toView(
 export async function listOpenPools(
   now: Date = new Date(),
 ): Promise<PoolView[]> {
-  const [pools, rakeBps] = await Promise.all([
-    prisma.pool.findMany({
-      where: {
-        status: { in: [PoolStatus.OPEN, PoolStatus.LOCKED] },
-        closesAt: { gt: now },
-      },
-      orderBy: { closesAt: "asc" },
-      include: { match: true },
-      take: 100,
-    }),
-    getGlobalRakeBps(),
-  ]);
-  return pools.map((p) => toView(p, rakeBps, now));
+  const pools = await prisma.pool.findMany({
+    where: {
+      status: { in: [PoolStatus.OPEN, PoolStatus.LOCKED] },
+      closesAt: { gt: now },
+    },
+    orderBy: { closesAt: "asc" },
+    include: { match: true },
+    take: 100,
+  });
+  return pools.map((p) => toView(p, now));
 }
 
 /** One pool with its match, or `null`. */
@@ -158,14 +153,11 @@ export async function getPoolDetail(
   poolId: string,
   now: Date = new Date(),
 ): Promise<PoolView | null> {
-  const [pool, rakeBps] = await Promise.all([
-    prisma.pool.findUnique({
-      where: { id: poolId },
-      include: { match: true },
-    }),
-    getGlobalRakeBps(),
-  ]);
-  return pool ? toView(pool, rakeBps, now) : null;
+  const pool = await prisma.pool.findUnique({
+    where: { id: poolId },
+    include: { match: true },
+  });
+  return pool ? toView(pool, now) : null;
 }
 
 /**
@@ -265,25 +257,22 @@ export interface AdminPool {
 export async function listAdminPools(
   now: Date = new Date(),
 ): Promise<AdminPool[]> {
-  const [pools, rakeBps] = await Promise.all([
-    prisma.pool.findMany({
-      where: {
-        status: {
-          in: [PoolStatus.PENDING_ONCHAIN, PoolStatus.OPEN, PoolStatus.LOCKED],
-        },
+  const pools = await prisma.pool.findMany({
+    where: {
+      status: {
+        in: [PoolStatus.PENDING_ONCHAIN, PoolStatus.OPEN, PoolStatus.LOCKED],
       },
-      orderBy: { closesAt: "asc" },
-      include: { match: true },
-      take: 200,
-    }),
-    getGlobalRakeBps(),
-  ]);
+    },
+    orderBy: { closesAt: "asc" },
+    include: { match: true },
+    take: 200,
+  });
 
   return pools.map((p) => ({
     poolId: p.id,
     onchainPoolId: p.onchainPoolId,
     status: effectiveStatus(p.status, p.closesAt, now),
-    rakeBps,
+    rakeBps: p.rakeBps,
     closesAt: p.closesAt,
     homeTeam: p.match.homeTeam,
     awayTeam: p.match.awayTeam,

@@ -141,6 +141,25 @@ export const sachetMarketAbi = [
   },
   {
     "type": "function",
+    "name": "getEffectiveStatus",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "enum SachetMarket.PoolStatus"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getPool",
     "inputs": [
       {
@@ -192,6 +211,11 @@ export const sachetMarketAbi = [
           },
           {
             "name": "totalClaimed",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "rakeBps",
             "type": "uint256",
             "internalType": "uint256"
           }
@@ -1022,6 +1046,11 @@ export const sachetMarketAbi = [
         "internalType": "address"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "SweepFirst",
+    "inputs": []
   },
   {
     "type": "error",

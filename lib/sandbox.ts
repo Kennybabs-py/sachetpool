@@ -233,6 +233,7 @@ export async function createDummyPool(input: {
       type: PoolType.RESULT_1X2,
       status: PoolStatus.PENDING_ONCHAIN,
       closesAt: new Date(closesAtSec * 1000),
+      rakeBps: await getGlobalRakeBps(),
     },
     select: { id: true },
   });
@@ -425,8 +426,6 @@ export async function resolveDummyPool(input: {
     where: { poolId: pool.id, status: BetStatus.PENDING },
   });
 
-  const rakeBps = await getGlobalRakeBps();
-
   for (const bet of bets) {
     if (refundMode) {
       await prisma.bet.update({
@@ -440,7 +439,7 @@ export async function resolveDummyPool(input: {
         pool.totalStake,
         bet.amount,
         winningStake,
-        rakeBps,
+        pool.rakeBps,
       );
       await prisma.bet.update({
         where: { id: bet.id },

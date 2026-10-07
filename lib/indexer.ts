@@ -7,7 +7,6 @@ import { sachetMarketAbi } from "./contracts/sachet-market";
 import { chain, MARKET_ADDRESS, MARKET_DEPLOY_BLOCK } from "@/config/chains";
 import { codeToSelection } from "./onchain";
 import { winnerPayout } from "./odds";
-import { getGlobalRakeBps } from "./pools";
 import {
   BetStatus,
   PoolStatus,
@@ -63,13 +62,37 @@ function cursorId(): string {
   return `${chain.id}:${MARKET_ADDRESS ?? "unset"}`;
 }
 
+/**
+ * Read a pool's snapshotted rake straight from the contract. The `PoolLaunched`
+ * event does not carry it, so it has to be re-read; `null` on failure so the
+ * handler can keep the row's existing value rather than zeroing it.
+ */
+async function readPoolRakeBps(poolId: string): Promise<number | null> {
+  if (!MARKET_ADDRESS) return null;
+  try {
+    const pool = await publicClient.readContract({
+      address: MARKET_ADDRESS as Address,
+      abi: sachetMarketAbi,
+      functionName: "getPool",
+      args: [poolId as `0x${string}`],
+    });
+    return Number(pool.rakeBps);
+  } catch {
+    return null;
+  }
+}
+
 // ── Event handlers ─────────────────────────────────────────────────────────
 
 async function handlePoolLaunched(args: Record<string, unknown>) {
   const poolId = String(args.poolId);
+  const rakeBps = await readPoolRakeBps(poolId);
   await prisma.pool.updateMany({
     where: { onchainPoolId: poolId },
-    data: { status: PoolStatus.OPEN },
+    data: {
+      status: PoolStatus.OPEN,
+      ...(rakeBps !== null ? { rakeBps } : {}),
+    },
   });
 }
 
@@ -260,8 +283,6 @@ async function handlePoolResolved(
     where: { poolId: pool.id, status: BetStatus.PENDING },
   });
 
-  const currentRakeBps = bets.length > 0 ? await getGlobalRakeBps() : 5;
-
   for (const bet of bets) {
     if (refundMode) {
       await prisma.bet.update({
@@ -275,7 +296,7 @@ async function handlePoolResolved(
         pool.totalStake,
         bet.amount,
         winningStake,
-        currentRakeBps,
+        pool.rakeBps,
       );
       await prisma.bet.update({
         where: { id: bet.id },
