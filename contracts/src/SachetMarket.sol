@@ -430,4 +430,19 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
     function getUserStake(bytes32 poolId, address user) external view returns (Bet memory) {
         return bets[poolId][user];
     }
+
+
+    /**
+     * @notice Retrieves the effective status of a pool.
+     * @dev Dynamically returns LOCKED if the pool is OPEN but past its expiresAt timestamp.
+     * @param poolId The unique identifier for the pool.
+     * @return The effective PoolStatus.
+     */
+    function getEffectiveStatus(bytes32 poolId) external view returns (PoolStatus) {
+        Pool storage r = pools[poolId];
+        if (r.expiresAt != 0 && r.status == PoolStatus.OPEN && block.timestamp >= r.expiresAt) {
+            return PoolStatus.LOCKED;
+        }
+        return r.status;
+    }
 }
