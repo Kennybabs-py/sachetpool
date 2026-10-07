@@ -4,6 +4,7 @@ import { connectorsForWallets } from "@rainbow-me/rainbowkit";
 import {
   rainbowWallet,
   walletConnectWallet,
+  injectedWallet,
   metaMaskWallet,
   zerionWallet,
 } from "@rainbow-me/rainbowkit/wallets";
@@ -68,6 +69,7 @@ export const rainbowkitConfig = getDefaultConfig({
       wallets: [
         rainbowWallet,
         walletConnectWallet,
+        injectedWallet,
         metaMaskWallet,
         zerionWallet,
       ],
