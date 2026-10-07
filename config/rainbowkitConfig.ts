@@ -4,11 +4,7 @@ import { connectorsForWallets } from "@rainbow-me/rainbowkit";
 import {
   rainbowWallet,
   walletConnectWallet,
-  phantomWallet,
   metaMaskWallet,
-  okxWallet,
-  rabbyWallet,
-  safeWallet,
   zerionWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 
@@ -37,10 +33,6 @@ const connectors = connectorsForWallets(
         rainbowWallet,
         walletConnectWallet,
         metaMaskWallet,
-        phantomWallet,
-        okxWallet,
-        rabbyWallet,
-        safeWallet,
         zerionWallet,
       ],
     },
