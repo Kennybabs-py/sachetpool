@@ -30,8 +30,9 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
 
     /**
      * @notice The current status of a betting pool
+     * @dev UNINITIALIZED is the default state for nonexistent pools.
      */
-    enum PoolStatus { OPEN, LOCKED, RESOLVED, CANCELLED }
+    enum PoolStatus { UNINITIALIZED, OPEN, LOCKED, RESOLVED, CANCELLED }
 
     /**
      * @notice Data structure defining a betting pool
