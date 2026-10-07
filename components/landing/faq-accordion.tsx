@@ -8,6 +8,13 @@ import {
 } from "@/components/ui/accordion";
 import { FAQ_GROUPS } from "@/lib/faqs";
 
+function slug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
 /**
  * The FAQ list, grouped into the three questions people actually arrive with:
  * what pari-mutuel is, how to join a pool, and how settlement pays out.
@@ -16,7 +23,11 @@ export function FaqAccordion() {
   return (
     <div className="flex flex-col gap-14">
       {FAQ_GROUPS.map((group) => (
-        <section key={group.title}>
+        <section
+          key={group.title}
+          id={slug(group.title)}
+          className="scroll-mt-20"
+        >
           <h2 className="font-mono text-[11px] tracking-[0.22em] text-muted-foreground uppercase">
             {group.title}
           </h2>

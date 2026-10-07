@@ -95,6 +95,26 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       },
     ],
   },
+  {
+    title: "Community and engagement",
+    items: [
+      {
+        question: "Who grows $SACH?",
+        answer:
+          "The community does. Sachet has no central marketing engine — the token and the market grow as players show up, share fixtures, invite friends and keep the pools liquid. Every stake and every shared pool is part of that effort.",
+      },
+      {
+        question: "Do top users share in the creator fees?",
+        answer:
+          "Yes. As the market grows, the top users on the leaderboard have a chance to share in creator fees. Rankings come straight from the public leaderboard, and rewards are distributed periodically. Play well, climb the board, and watch announcements for each distribution.",
+      },
+      {
+        question: "How do I take part?",
+        answer:
+          "Place bets, climb the leaderboard, and stay active. Consistency and sharp picks matter more than a single big win — the leaderboard is the standing record of who is helping the pool grow over time.",
+      },
+    ],
+  },
 ] as const;
 
 /** Flattened view, used for the `FAQPage` structured data. */
