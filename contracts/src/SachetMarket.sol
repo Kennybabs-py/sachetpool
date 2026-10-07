@@ -146,8 +146,8 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
      * @param _rakeBps The initial global rake in basis points (1-10).
      */
     constructor(address _sachetMarketToken, address _adminMultisig, uint256 _rakeBps) {
-        if (!(_sachetMarketToken != address(0))) revert ZeroAddress();
-        if (!(_adminMultisig != address(0))) revert ZeroAddress();
+        if (_sachetMarketToken == address(0)) revert ZeroAddress();
+        if (_adminMultisig == address(0)) revert ZeroAddress();
         if (_rakeBps < 1 || _rakeBps > 10) revert InvalidRake();
         
         sachetMarketToken = IERC20(_sachetMarketToken);
@@ -183,9 +183,9 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
      * @dev Only callable by accounts with the ADMIN_ROLE.
      */
     function launchPool(bytes32 poolId, uint64 expiresAt) external onlyRole(ADMIN_ROLE) {
-        if (!(expiresAt > block.timestamp)) revert ExpiresatInPast();
-        if (!(expiresAt <= block.timestamp + MAX_POOL_DURATION)) revert ExpiresatExceedsMaxDuration();
-        if (!(pools[poolId].expiresAt == 0)) revert PoolAlreadyExists();
+        if (expiresAt <= block.timestamp) revert ExpiresatInPast();
+        if (expiresAt > block.timestamp + MAX_POOL_DURATION) revert ExpiresatExceedsMaxDuration();
+        if (pools[poolId].expiresAt != 0) revert PoolAlreadyExists();
 
         Pool storage r = pools[poolId];
         r.expiresAt = expiresAt;
@@ -205,23 +205,23 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
      */
     function placeBet(bytes32 poolId, Outcome outcome, uint256 amount) external nonReentrant whenNotPaused {
         Pool storage r = pools[poolId];
-        if (!(r.expiresAt != 0)) revert PoolDoesNotExist();
-        if (!(block.timestamp < r.expiresAt)) revert PoolClosed();
-        if (!(r.status == PoolStatus.OPEN)) revert PoolNotOpen();
-        if (!(outcome != Outcome.UNSET && outcome != Outcome.VOID)) revert InvalidOutcome();
-        if (!(amount > 0)) revert AmountMustBeGreaterThan0();
+        if (r.expiresAt == 0) revert PoolDoesNotExist();
+        if (block.timestamp >= r.expiresAt) revert PoolClosed();
+        if (r.status != PoolStatus.OPEN) revert PoolNotOpen();
+        if (outcome == Outcome.UNSET || outcome == Outcome.VOID) revert InvalidOutcome();
+        if (amount == 0) revert AmountMustBeGreaterThan0();
 
         Bet storage b = bets[poolId][msg.sender];
         bool hasActiveBet = (b.amount > 0);
         
         if (hasActiveBet) {
-            if (!(b.outcome == outcome)) revert CannotChangeOutcome();
+            if (b.outcome != outcome) revert CannotChangeOutcome();
         }
 
         uint256 balanceBefore = sachetMarketToken.balanceOf(address(this));
         sachetMarketToken.safeTransferFrom(msg.sender, address(this), amount);
         uint256 receivedAmount = sachetMarketToken.balanceOf(address(this)) - balanceBefore;
-        if (!(receivedAmount > 0)) revert ReceivedAmountMustBeGreaterThan0();
+        if (receivedAmount == 0) revert ReceivedAmountMustBeGreaterThan0();
 
         b.amount += receivedAmount;
         b.outcome = outcome;
@@ -248,11 +248,11 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
      */
     function withdrawBet(bytes32 poolId) external nonReentrant {
         Pool storage r = pools[poolId];
-        if (!(block.timestamp < r.expiresAt)) revert TooLateToWithdraw();
-        if (!(r.status == PoolStatus.OPEN)) revert PoolNotOpen();
+        if (block.timestamp >= r.expiresAt) revert TooLateToWithdraw();
+        if (r.status != PoolStatus.OPEN) revert PoolNotOpen();
 
         Bet storage b = bets[poolId][msg.sender];
-        if (!(b.amount > 0)) revert NoActiveBet();
+        if (b.amount == 0) revert NoActiveBet();
 
         uint256 amountToReturn = b.amount;
         
@@ -282,10 +282,10 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
      */
     function resolvePool(bytes32 poolId, Outcome result) external onlyRole(RESOLVER_ROLE) {
         Pool storage r = pools[poolId];
-        if (!(r.expiresAt != 0)) revert PoolDoesNotExist();
-        if (!(block.timestamp >= r.expiresAt)) revert PoolStillOpen();
-        if (!(r.status == PoolStatus.OPEN)) revert AlreadyResolvedOrCancelled();
-        if (!(result != Outcome.UNSET)) revert InvalidResult();
+        if (r.expiresAt == 0) revert PoolDoesNotExist();
+        if (block.timestamp < r.expiresAt) revert PoolStillOpen();
+        if (r.status != PoolStatus.OPEN) revert AlreadyResolvedOrCancelled();
+        if (result == Outcome.UNSET) revert InvalidResult();
 
         r.status = PoolStatus.RESOLVED;
         r.result = result;
@@ -301,8 +301,8 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
      */
     function cancelPool(bytes32 poolId) external onlyRole(ADMIN_ROLE) {
         Pool storage r = pools[poolId];
-        if (!(r.expiresAt != 0)) revert PoolDoesNotExist();
-        if (!(r.status == PoolStatus.OPEN)) revert PoolNotOpen();
+        if (r.expiresAt == 0) revert PoolDoesNotExist();
+        if (r.status != PoolStatus.OPEN) revert PoolNotOpen();
         
         r.status = PoolStatus.CANCELLED;
         
@@ -316,11 +316,11 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
      */
     function claim(bytes32 poolId) external nonReentrant {
         Pool storage r = pools[poolId];
-        if (!(r.status == PoolStatus.RESOLVED || r.status == PoolStatus.CANCELLED)) revert NotResolvedOrCancelled();
+        if (r.status != PoolStatus.RESOLVED && r.status != PoolStatus.CANCELLED) revert NotResolvedOrCancelled();
 
         Bet storage b = bets[poolId][msg.sender];
-        if (!(b.amount > 0)) revert NoClaimableBet();
-        if (!(!b.claimed)) revert AlreadyClaimed();
+        if (b.amount == 0) revert NoClaimableBet();
+        if (b.claimed) revert AlreadyClaimed();
 
         uint256 payout = 0;
 
@@ -367,7 +367,7 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
      * @dev Only callable by accounts with the ADMIN_ROLE when the contract is paused.
      */
     function updateToken(address newToken) external onlyRole(ADMIN_ROLE) whenPaused {
-        if (!(newToken != address(0))) revert ZeroAddress();
+        if (newToken == address(0)) revert ZeroAddress();
         address oldToken = address(sachetMarketToken);
         sachetMarketToken = IERC20(newToken);
         emit TokenUpdated(oldToken, newToken);
@@ -382,7 +382,7 @@ contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
      * @dev Only callable by accounts with the ADMIN_ROLE when the contract is paused.
      */
     function withdrawTreasury(address token, address to, uint256 amount) external onlyRole(ADMIN_ROLE) whenPaused {
-        if (!(to != address(0))) revert ZeroAddress();
+        if (to == address(0)) revert ZeroAddress();
         
         uint256 bal = IERC20(token).balanceOf(address(this));
         if (amount == type(uint256).max) {
