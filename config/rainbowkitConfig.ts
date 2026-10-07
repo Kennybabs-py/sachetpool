@@ -7,6 +7,11 @@ import {
   injectedWallet,
   metaMaskWallet,
   zerionWallet,
+  uniswapWallet,
+  trustWallet,
+  safeWallet,
+  rabbyWallet,
+  phantomWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 
@@ -17,6 +22,19 @@ const WALLET_CONNECT_PROJECT_ID = process.env
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ||
   (typeof window !== "undefined" ? window.location.origin : undefined);
+
+const wallets = [
+  rainbowWallet,
+  walletConnectWallet,
+  injectedWallet,
+  metaMaskWallet,
+  zerionWallet,
+  uniswapWallet,
+  trustWallet,
+  safeWallet,
+  rabbyWallet,
+  phantomWallet,
+];
 
 /**
  * Kept deliberately short.
@@ -31,13 +49,7 @@ const connectors = connectorsForWallets(
   [
     {
       groupName: "Recommended",
-      wallets: [
-        rainbowWallet,
-        walletConnectWallet,
-        injectedWallet,
-        metaMaskWallet,
-        zerionWallet,
-      ],
+      wallets,
     },
   ],
   {
@@ -67,13 +79,7 @@ export const rainbowkitConfig = getDefaultConfig({
   wallets: [
     {
       groupName: "Recommended",
-      wallets: [
-        rainbowWallet,
-        walletConnectWallet,
-        injectedWallet,
-        metaMaskWallet,
-        zerionWallet,
-      ],
+      wallets,
     },
   ],
   storage: createStorage({
