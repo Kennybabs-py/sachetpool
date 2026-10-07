@@ -1,4 +1,4 @@
-import { http, createConfig } from "wagmi";
+import { cookieStorage, createConfig, createStorage, http } from "wagmi";
 import { chain, RPC_URL } from "./chains";
 import { connectorsForWallets } from "@rainbow-me/rainbowkit";
 import {
@@ -34,6 +34,7 @@ const connectors = connectorsForWallets(
       wallets: [
         rainbowWallet,
         walletConnectWallet,
+        injectedWallet,
         metaMaskWallet,
         zerionWallet,
       ],
@@ -75,4 +76,8 @@ export const rainbowkitConfig = getDefaultConfig({
       ],
     },
   ],
+  storage: createStorage({
+    storage: cookieStorage,
+  }),
+  ssr: true,
 });
