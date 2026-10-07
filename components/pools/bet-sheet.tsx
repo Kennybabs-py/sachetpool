@@ -43,7 +43,7 @@ const OUTCOMES: { key: Selection; label: string }[] = [
   { key: "AWAY", label: "Away" },
 ];
 
-const QUICK_STAKES = ["1", "5", "10", "25"];
+const QUICK_STAKES = ["100", "500", "10000", "25000"];
 const isPostHogConfigured = Boolean(
   process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
   process.env.NEXT_PUBLIC_POSTHOG_HOST,

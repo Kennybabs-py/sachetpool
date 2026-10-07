@@ -28,7 +28,7 @@ export default async function PoolDetailPage({
         ← Board
       </Link>
 
-      <PoolCard pool={pool} serverNowMs={serverNowMs} />
+      <PoolCard pool={pool} serverNowMs={serverNowMs} showDetailLink={false} />
 
       {resolved && (
         <div className="rounded-2xl border border-border bg-card p-4 text-sm">

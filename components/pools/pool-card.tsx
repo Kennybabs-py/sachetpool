@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Selection } from "@/generated/prisma/client";
 import type { PoolView } from "@/lib/pools";
 import { TOKEN_DECIMALS, TOKEN_SYMBOL } from "@/config/chains";
@@ -23,9 +24,11 @@ const OUTCOMES: { key: Selection; label: string }[] = [
 export function PoolCard({
   pool,
   serverNowMs,
+  showDetailLink = true,
 }: {
   pool: PoolView;
   serverNowMs: number;
+  showDetailLink?: boolean;
 }) {
   const [selection, setSelection] = useState<Selection | null>(null);
   const locked = pool.status !== "OPEN";
@@ -90,9 +93,19 @@ export function PoolCard({
         ))}
       </div>
 
-      <p className="mt-3 text-xs text-muted-foreground tabular-nums">
-        Pot {formatToken(pool.totalStake, TOKEN_DECIMALS)} {TOKEN_SYMBOL}
-      </p>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground tabular-nums">
+          Pot {formatToken(pool.totalStake, TOKEN_DECIMALS)} {TOKEN_SYMBOL}
+        </p>
+        {showDetailLink && (
+          <Link
+            href={`/pools/${pool.poolId}`}
+            className="shrink-0 text-xs font-medium text-primary transition-colors hover:text-primary/80"
+          >
+            Pool details →
+          </Link>
+        )}
+      </div>
 
       <BetSheet
         pool={pool}
