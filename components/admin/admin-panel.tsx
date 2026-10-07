@@ -87,7 +87,7 @@ function OpenPoolSection({ candidates }: { candidates: MatchCandidate[] }) {
   const router = useRouter();
   const { isConnected } = useAccount();
   const publicClient = usePublicClient();
-  const { mutateAsync } = useWriteContract();
+  const { writeContractAsync: mutateAsync } = useWriteContract();
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
   const [query, setQuery] = useState("");
@@ -318,7 +318,7 @@ function ResolveRow({ pool }: { pool: AdminPool }) {
   const router = useRouter();
   const { isConnected } = useAccount();
   const publicClient = usePublicClient();
-  const { mutateAsync } = useWriteContract();
+  const { writeContractAsync: mutateAsync } = useWriteContract();
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
   const [outcome, setOutcome] = useState<OnchainOutcome>("HOME");

@@ -79,7 +79,7 @@ export function BetSheet({
   const { address, isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
   const publicClient = usePublicClient();
-  const { mutateAsync } = useWriteContract();
+  const { writeContractAsync: mutateAsync } = useWriteContract();
 
   const { balance, refetch: refetchBalance } = useSachBalance();
 
