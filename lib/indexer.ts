@@ -96,10 +96,7 @@ async function handlePoolLaunched(args: Record<string, unknown>) {
   });
 }
 
-async function handleBetPlaced(
-  args: Record<string, unknown>,
-  log: DecodedLog,
-) {
+async function handleBetPlaced(args: Record<string, unknown>, log: DecodedLog) {
   const poolId = String(args.poolId);
   const bettor = String(args.user).toLowerCase();
   const selection = codeToSelection(Number(args.outcome));
@@ -354,7 +351,7 @@ async function applyLog(log: DecodedLog) {
     case "Claimed":
       return handleClaimed(log.args, log);
     default:
-      return; 
+      return;
   }
 }
 
@@ -430,8 +427,7 @@ export async function runIndexer(): Promise<IndexResult> {
         blockNumber: log.blockNumber ?? 0n,
         address,
         eventName: log.eventName,
-        poolId:
-          typeof log.args.poolId === "string" ? log.args.poolId : null,
+        poolId: typeof log.args.poolId === "string" ? log.args.poolId : null,
         payload: jsonSafe(log.args),
       },
     });

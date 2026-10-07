@@ -27,7 +27,7 @@ const getSiweMessageOptions: GetSiweMessageOptions = () => ({
 const queryClient = new QueryClient();
 const isPostHogConfigured = Boolean(
   process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
-    process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  process.env.NEXT_PUBLIC_POSTHOG_HOST,
 );
 
 /**
