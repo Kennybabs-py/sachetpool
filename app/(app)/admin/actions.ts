@@ -7,22 +7,31 @@ import { isAdmin } from "@/lib/admin";
 import { PoolStatus, PoolType, Selection } from "@/generated/prisma/client";
 import {
   computeOnchainPoolId,
-  outcomeToCode,
   type OnchainOutcome,
 } from "@/lib/onchain";
-import { launchPool, resolvePool } from "@/lib/market";
 import { getGlobalRakeBps } from "@/lib/pools";
 
 /**
  * Admin dashboard server actions.
  *
- * Both actions re-check the allowlist (never trust the page gate) and execute
- * through the server operator key. A failed on-chain call leaves the DB row in
- * `PENDING_ONCHAIN` so it can be retried rather than silently lost.
+ * On-chain writes are signed by the admin's own connected wallet (see
+ * `components/admin/admin-panel.tsx`), so these actions only touch Postgres and
+ * re-check the allowlist. The flow per pool is:
+ *
+ *   prepare*  → validate + persist the row (PENDING_ONCHAIN)
+ *   <wallet>  → the admin signs launchPool / resolvePool client-side
+ *   confirm*  → mark the row OPEN / RESOLVED with the confirmed tx hash
+ *
+ * A failed wallet signature leaves the row PENDING_ONCHAIN, and `prepare*`
+ * reuses that row, so the attempt can simply be retried.
  */
 
 export type ActionResult =
   | { ok: true; message: string }
+  | { ok: false; error: string };
+
+export type PreparePoolResult =
+  | { ok: true; poolId: string; onchainPoolId: string }
   | { ok: false; error: string };
 
 async function assertAdmin() {
@@ -31,11 +40,12 @@ async function assertAdmin() {
   return user;
 }
 
-export async function openPoolAction(input: {
+/** Persist (or re-use) a PENDING_ONCHAIN row and hand back the ids to launch. */
+export async function preparePoolAction(input: {
   matchId: string;
-  /** Unix seconds; selection expiry (defaults to kickoff in the UI). */
+  /** Unix seconds; the expiry the admin will sign on-chain. */
   closesAt: number;
-}): Promise<ActionResult> {
+}): Promise<PreparePoolResult> {
   let address: string;
   try {
     address = (await assertAdmin()).address;
@@ -45,12 +55,15 @@ export async function openPoolAction(input: {
 
   const match = await prisma.match.findUnique({
     where: { id: input.matchId },
-    include: { pools: { select: { id: true } } },
+    include: { pools: true },
   });
   if (!match) return { ok: false, error: "Match not found." };
-  if (match.pools.length > 0) {
-    return { ok: false, error: "This match already has a pool." };
-  }
+
+  // Only a not-yet-launched pool is replaceable; anything else is final.
+  const launched = match.pools.find(
+    (p) => p.status !== PoolStatus.PENDING_ONCHAIN,
+  );
+  if (launched) return { ok: false, error: "This match already has a pool." };
 
   const nowSec = Math.floor(Date.now() / 1000);
   const closesAt = Math.trunc(input.closesAt);
@@ -59,46 +72,69 @@ export async function openPoolAction(input: {
   }
 
   const onchainPoolId = computeOnchainPoolId(match.externalId);
-  // The contract snapshots the global rake at launch; seed the row with the
-  // current value so odds are right before the indexer reconciles it.
   const rakeBps = await getGlobalRakeBps();
+  const pending = match.pools.find(
+    (p) => p.status === PoolStatus.PENDING_ONCHAIN,
+  );
 
-  const pool = await prisma.pool.create({
-    data: {
-      matchId: match.id,
-      onchainPoolId,
-      type: PoolType.RESULT_1X2,
-      status: PoolStatus.PENDING_ONCHAIN,
-      closesAt: new Date(closesAt * 1000),
-      rakeBps,
-      createdBy: address,
-    },
+  const pool = pending
+    ? await prisma.pool.update({
+        where: { id: pending.id },
+        data: {
+          closesAt: new Date(closesAt * 1000),
+          rakeBps,
+          createdBy: address,
+        },
+        select: { id: true },
+      })
+    : await prisma.pool.create({
+        data: {
+          matchId: match.id,
+          onchainPoolId,
+          type: PoolType.RESULT_1X2,
+          status: PoolStatus.PENDING_ONCHAIN,
+          closesAt: new Date(closesAt * 1000),
+          rakeBps,
+          createdBy: address,
+        },
+        select: { id: true },
+      });
+
+  return { ok: true, poolId: pool.id, onchainPoolId };
+}
+
+/** Mark a pool OPEN once the admin's `launchPool` tx has confirmed. */
+export async function confirmPoolAction(input: {
+  poolId: string;
+  txHash: string;
+}): Promise<ActionResult> {
+  try {
+    await assertAdmin();
+  } catch {
+    return { ok: false, error: "Not authorized." };
+  }
+
+  const pool = await prisma.pool.findUnique({
+    where: { id: input.poolId },
     select: { id: true },
   });
+  if (!pool) return { ok: false, error: "Pool not found." };
 
-  try {
-    const txHash = await launchPool(onchainPoolId, closesAt);
-    await prisma.pool.update({
-      where: { id: pool.id },
-      data: { status: PoolStatus.OPEN, createTxHash: txHash },
-    });
-  } catch (err) {
-    return {
-      ok: false,
-      error: `Pool row saved as PENDING_ONCHAIN, but createPool failed: ${
-        err instanceof Error ? err.message : "unknown error"
-      }`,
-    };
-  }
+  await prisma.pool.update({
+    where: { id: pool.id },
+    data: { status: PoolStatus.OPEN, createTxHash: input.txHash },
+  });
 
   revalidatePath("/admin");
   revalidatePath("/");
   return { ok: true, message: "Pool opened on-chain." };
 }
 
-export async function resolvePoolAction(input: {
+/** Mark a pool settled once the admin's `resolvePool` tx has confirmed. */
+export async function confirmResolveAction(input: {
   poolId: string;
   outcome: OnchainOutcome;
+  txHash: string;
 }): Promise<ActionResult> {
   try {
     await assertAdmin();
@@ -112,25 +148,11 @@ export async function resolvePoolAction(input: {
 
   const pool = await prisma.pool.findUnique({
     where: { id: input.poolId },
-    select: { id: true, onchainPoolId: true, status: true, closesAt: true },
+    select: { id: true, status: true },
   });
   if (!pool) return { ok: false, error: "Pool not found." };
   if (pool.status === PoolStatus.RESOLVED || pool.status === PoolStatus.VOID) {
     return { ok: false, error: "Pool is already resolved." };
-  }
-
-  const code = outcomeToCode(input.outcome);
-
-  let txHash: string;
-  try {
-    txHash = await resolvePool(pool.onchainPoolId as `0x${string}`, code);
-  } catch (err) {
-    return {
-      ok: false,
-      error: `resolve() failed: ${
-        err instanceof Error ? err.message : "unknown error"
-      }`,
-    };
   }
 
   const selection =
@@ -141,7 +163,7 @@ export async function resolvePoolAction(input: {
     data: {
       status: selection ? PoolStatus.RESOLVED : PoolStatus.VOID,
       winningSelection: selection ?? undefined,
-      resolvedTxHash: txHash,
+      resolvedTxHash: input.txHash,
       settledAt: new Date(),
     },
   });

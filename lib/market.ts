@@ -64,6 +64,7 @@ export async function launchPool(
   expiresAt: number,
 ): Promise<Hash> {
   const wallet = getOperatorWalletClient();
+
   const hash = await wallet.writeContract({
     address: marketAddress(),
     abi: sachetMarketAbi,

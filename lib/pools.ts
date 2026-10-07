@@ -219,13 +219,18 @@ export interface MatchCandidate {
   kickoffAt: Date;
 }
 
-/** Scheduled matches with no pool yet — openable from the admin dashboard. */
+/** Scheduled matches with no launched pool — openable from the admin dashboard. */
 export async function listPoolCandidates(): Promise<MatchCandidate[]> {
   return prisma.match.findMany({
     where: {
       kickoffAt: { gt: new Date() },
       status: "SCHEDULED",
-      pools: { none: {} },
+      // No pool yet, or only a PENDING_ONCHAIN row left by a failed launch, so
+      // a reverted wallet signature can be retried without losing the match.
+      OR: [
+        { pools: { none: {} } },
+        { pools: { every: { status: PoolStatus.PENDING_ONCHAIN } } },
+      ],
     },
     orderBy: { kickoffAt: "asc" },
     select: {

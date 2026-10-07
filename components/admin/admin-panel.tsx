@@ -1,16 +1,21 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { Check, Search } from "lucide-react";
+import { useConnection, usePublicClient, useWriteContract } from "wagmi";
 import type { MatchCandidate, AdminPool } from "@/lib/pools";
-import type { OnchainOutcome } from "@/lib/onchain";
+import { outcomeToCode, type OnchainOutcome } from "@/lib/onchain";
 import {
-  openPoolAction,
-  resolvePoolAction,
+  confirmPoolAction,
+  confirmResolveAction,
+  preparePoolAction,
   type ActionResult,
 } from "@/app/(app)/admin/actions";
 import { PrimaryButton } from "@/components/common/primary-button";
+import { MARKET_ADDRESS } from "@/config/chains";
+import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
 import { cn } from "@/lib/utils";
 
 const isPostHogConfigured = Boolean(
@@ -20,8 +25,18 @@ const isPostHogConfigured = Boolean(
 
 /**
  * Admin dashboard interactivity. Renders the "open a pool" queue and the
- * "resolve" queue; every write goes through the operator-key server actions.
+ * "resolve" queue.
+ *
+ * The server actions only touch Postgres and re-check the admin allowlist; the
+ * on-chain calls (`launchPool` / `resolvePool`) are signed by the logged-in
+ * admin's own wallet, so no server hot key or funded operator account is
+ * needed. The admin wallet must hold the on-chain ADMIN_ROLE / RESOLVER_ROLE.
  */
+
+function shortError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.split("\n")[0].slice(0, 200);
+}
 
 function toLocalInputValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -69,6 +84,10 @@ function formatKickoff(date: Date): string {
 }
 
 function OpenPoolSection({ candidates }: { candidates: MatchCandidate[] }) {
+  const router = useRouter();
+  const { isConnected } = useConnection();
+  const publicClient = usePublicClient();
+  const { mutateAsync } = useWriteContract();
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
   const [query, setQuery] = useState("");
@@ -106,16 +125,47 @@ function OpenPoolSection({ candidates }: { candidates: MatchCandidate[] }) {
 
   function submit() {
     if (!selected || pending) return;
+    if (!isConnected) {
+      setResult({ ok: false, error: "Connect the admin wallet first." });
+      return;
+    }
+    if (!MARKET_ADDRESS || !publicClient) {
+      setResult({ ok: false, error: "Market is not configured." });
+      return;
+    }
+    const market = MARKET_ADDRESS;
+    const client = publicClient;
     const closesAtSec = Math.floor(new Date(closesAt).getTime() / 1000);
     startTransition(async () => {
-      const res = await openPoolAction({
+      setResult(null);
+      const prep = await preparePoolAction({
         matchId: selected.id,
         closesAt: closesAtSec,
       });
-      if (res.ok && isPostHogConfigured) {
-        posthog.capture("pool_opened", { league: selected.league });
+      if (!prep.ok) {
+        setResult(prep);
+        return;
       }
-      setResult(res);
+      try {
+        const hash = await mutateAsync({
+          address: market,
+          abi: sachetMarketAbi,
+          functionName: "launchPool",
+          args: [prep.onchainPoolId as `0x${string}`, BigInt(closesAtSec)],
+        });
+        await client.waitForTransactionReceipt({ hash });
+        const res = await confirmPoolAction({
+          poolId: prep.poolId,
+          txHash: hash,
+        });
+        if (res.ok && isPostHogConfigured) {
+          posthog.capture("pool_opened", { league: selected.league });
+        }
+        setResult(res);
+        router.refresh();
+      } catch (err) {
+        setResult({ ok: false, error: shortError(err) });
+      }
     });
   }
 
@@ -265,9 +315,51 @@ function ResolveSection({ pools }: { pools: AdminPool[] }) {
 }
 
 function ResolveRow({ pool }: { pool: AdminPool }) {
+  const router = useRouter();
+  const { isConnected } = useConnection();
+  const publicClient = usePublicClient();
+  const { mutateAsync } = useWriteContract();
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
   const [outcome, setOutcome] = useState<OnchainOutcome>("HOME");
+
+  function submit() {
+    if (pending) return;
+    if (!isConnected) {
+      setResult({ ok: false, error: "Connect the admin wallet first." });
+      return;
+    }
+    if (!MARKET_ADDRESS || !publicClient) {
+      setResult({ ok: false, error: "Market is not configured." });
+      return;
+    }
+    const market = MARKET_ADDRESS;
+    const client = publicClient;
+    startTransition(async () => {
+      setResult(null);
+      try {
+        const hash = await mutateAsync({
+          address: market,
+          abi: sachetMarketAbi,
+          functionName: "resolvePool",
+          args: [pool.onchainPoolId as `0x${string}`, outcomeToCode(outcome)],
+        });
+        await client.waitForTransactionReceipt({ hash });
+        const res = await confirmResolveAction({
+          poolId: pool.poolId,
+          outcome,
+          txHash: hash,
+        });
+        if (res.ok && isPostHogConfigured) {
+          posthog.capture("pool_resolved", { outcome });
+        }
+        setResult(res);
+        router.refresh();
+      } catch (err) {
+        setResult({ ok: false, error: shortError(err) });
+      }
+    });
+  }
 
   return (
     <li className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -297,18 +389,7 @@ function ResolveRow({ pool }: { pool: AdminPool }) {
           type="button"
           size="sm"
           disabled={pending}
-          onClick={() =>
-            startTransition(async () => {
-              const res = await resolvePoolAction({
-                poolId: pool.poolId,
-                outcome,
-              });
-              if (res.ok && isPostHogConfigured) {
-                posthog.capture("pool_resolved", { outcome });
-              }
-              setResult(res);
-            })
-          }
+          onClick={submit}
         >
           {pending ? "Resolving…" : "Resolve"}
         </PrimaryButton>

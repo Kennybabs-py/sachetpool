@@ -7,1059 +7,623 @@
  */
 export const sachetMarketAbi = [
   {
-    "type": "constructor",
-    "inputs": [
+    inputs: [
+      { internalType: "address", name: "_sachetMarketToken", type: "address" },
+      { internalType: "address", name: "_adminMultisig", type: "address" },
+      { internalType: "uint256", name: "_rakeBps", type: "uint256" },
+    ],
+    stateMutability: "nonpayable",
+    type: "constructor",
+  },
+  { inputs: [], name: "AccessControlBadConfirmation", type: "error" },
+  {
+    inputs: [
+      { internalType: "address", name: "account", type: "address" },
+      { internalType: "bytes32", name: "neededRole", type: "bytes32" },
+    ],
+    name: "AccessControlUnauthorizedAccount",
+    type: "error",
+  },
+  { inputs: [], name: "AlreadyClaimed", type: "error" },
+  { inputs: [], name: "AlreadyResolvedOrCancelled", type: "error" },
+  { inputs: [], name: "AmountExceedsBalance", type: "error" },
+  { inputs: [], name: "AmountMustBeGreaterThan0", type: "error" },
+  { inputs: [], name: "CannotChangeOutcome", type: "error" },
+  { inputs: [], name: "EnforcedPause", type: "error" },
+  { inputs: [], name: "ExpectedPause", type: "error" },
+  { inputs: [], name: "ExpiresatExceedsMaxDuration", type: "error" },
+  { inputs: [], name: "ExpiresatInPast", type: "error" },
+  { inputs: [], name: "InvalidOutcome", type: "error" },
+  { inputs: [], name: "InvalidRake", type: "error" },
+  { inputs: [], name: "InvalidResult", type: "error" },
+  { inputs: [], name: "NoActiveBet", type: "error" },
+  { inputs: [], name: "NoClaimableBet", type: "error" },
+  { inputs: [], name: "NotResolvedOrCancelled", type: "error" },
+  { inputs: [], name: "PoolAlreadyExists", type: "error" },
+  { inputs: [], name: "PoolClosed", type: "error" },
+  { inputs: [], name: "PoolDoesNotExist", type: "error" },
+  { inputs: [], name: "PoolNotOpen", type: "error" },
+  { inputs: [], name: "PoolStillOpen", type: "error" },
+  { inputs: [], name: "ReceivedAmountMustBeGreaterThan0", type: "error" },
+  { inputs: [], name: "ReentrancyGuardReentrantCall", type: "error" },
+  {
+    inputs: [{ internalType: "address", name: "token", type: "address" }],
+    name: "SafeERC20FailedOperation",
+    type: "error",
+  },
+  { inputs: [], name: "SweepFirst", type: "error" },
+  { inputs: [], name: "TooLateToWithdraw", type: "error" },
+  { inputs: [], name: "ZeroAddress", type: "error" },
+  {
+    anonymous: false,
+    inputs: [
       {
-        "name": "_sachetMarketToken",
-        "type": "address",
-        "internalType": "address"
+        indexed: true,
+        internalType: "bytes32",
+        name: "poolId",
+        type: "bytes32",
+      },
+      { indexed: true, internalType: "address", name: "user", type: "address" },
+      {
+        indexed: false,
+        internalType: "enum SachetMarket.Outcome",
+        name: "outcome",
+        type: "uint8",
       },
       {
-        "name": "_adminMultisig",
-        "type": "address",
-        "internalType": "address"
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "BetPlaced",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "poolId",
+        type: "bytes32",
+      },
+      { indexed: true, internalType: "address", name: "user", type: "address" },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "BetWithdrawn",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "poolId",
+        type: "bytes32",
+      },
+      { indexed: true, internalType: "address", name: "user", type: "address" },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "payout",
+        type: "uint256",
+      },
+    ],
+    name: "Claimed",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "Paused",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "poolId",
+        type: "bytes32",
+      },
+    ],
+    name: "PoolCancelled",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "poolId",
+        type: "bytes32",
       },
       {
-        "name": "_rakeBps",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
+        indexed: false,
+        internalType: "uint64",
+        name: "expiresAt",
+        type: "uint64",
+      },
     ],
-    "stateMutability": "nonpayable"
+    name: "PoolLaunched",
+    type: "event",
   },
   {
-    "type": "function",
-    "name": "ADMIN_ROLE",
-    "inputs": [],
-    "outputs": [
+    anonymous: false,
+    inputs: [
       {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "DEFAULT_ADMIN_ROLE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "MAX_POOL_DURATION",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "RESOLVER_ROLE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "bets",
-    "inputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        indexed: true,
+        internalType: "bytes32",
+        name: "poolId",
+        type: "bytes32",
       },
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
+        indexed: false,
+        internalType: "enum SachetMarket.Outcome",
+        name: "result",
+        type: "uint8",
+      },
     ],
-    "outputs": [
+    name: "PoolResolved",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
       {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
+        indexed: false,
+        internalType: "uint256",
+        name: "oldRake",
+        type: "uint256",
       },
       {
-        "name": "outcome",
-        "type": "uint8",
-        "internalType": "enum SachetMarket.Outcome"
+        indexed: false,
+        internalType: "uint256",
+        name: "newRake",
+        type: "uint256",
+      },
+    ],
+    name: "RakeUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "bytes32", name: "role", type: "bytes32" },
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "previousAdminRole",
+        type: "bytes32",
       },
       {
-        "name": "claimed",
-        "type": "bool",
-        "internalType": "bool"
-      }
+        indexed: true,
+        internalType: "bytes32",
+        name: "newAdminRole",
+        type: "bytes32",
+      },
     ],
-    "stateMutability": "view"
+    name: "RoleAdminChanged",
+    type: "event",
   },
   {
-    "type": "function",
-    "name": "cancelPool",
-    "inputs": [
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "bytes32", name: "role", type: "bytes32" },
       {
-        "name": "poolId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        indexed: true,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "sender",
+        type: "address",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    name: "RoleGranted",
+    type: "event",
   },
   {
-    "type": "function",
-    "name": "claim",
-    "inputs": [
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: "bytes32", name: "role", type: "bytes32" },
       {
-        "name": "poolId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        indexed: true,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "sender",
+        type: "address",
+      },
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    name: "RoleRevoked",
+    type: "event",
   },
   {
-    "type": "function",
-    "name": "getEffectiveStatus",
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "name": "poolId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
+        indexed: true,
+        internalType: "address",
+        name: "oldToken",
+        type: "address",
+      },
       {
-        "name": "",
-        "type": "uint8",
-        "internalType": "enum SachetMarket.PoolStatus"
-      }
+        indexed: true,
+        internalType: "address",
+        name: "newToken",
+        type: "address",
+      },
     ],
-    "stateMutability": "view"
+    name: "TokenUpdated",
+    type: "event",
   },
   {
-    "type": "function",
-    "name": "getPool",
-    "inputs": [
+    anonymous: false,
+    inputs: [
       {
-        "name": "poolId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+        indexed: true,
+        internalType: "address",
+        name: "token",
+        type: "address",
+      },
+      { indexed: true, internalType: "address", name: "to", type: "address" },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
     ],
-    "outputs": [
+    name: "TreasuryWithdrawn",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
       {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct SachetMarket.Pool",
-        "components": [
+        indexed: false,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "Unpaused",
+    type: "event",
+  },
+  {
+    inputs: [],
+    name: "ADMIN_ROLE",
+    outputs: [{ internalType: "bytes32", name: "", type: "bytes32" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "DEFAULT_ADMIN_ROLE",
+    outputs: [{ internalType: "bytes32", name: "", type: "bytes32" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "MAX_POOL_DURATION",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "RESOLVER_ROLE",
+    outputs: [{ internalType: "bytes32", name: "", type: "bytes32" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "bytes32", name: "", type: "bytes32" },
+      { internalType: "address", name: "", type: "address" },
+    ],
+    name: "bets",
+    outputs: [
+      { internalType: "uint256", name: "amount", type: "uint256" },
+      {
+        internalType: "enum SachetMarket.Outcome",
+        name: "outcome",
+        type: "uint8",
+      },
+      { internalType: "bool", name: "claimed", type: "bool" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "bytes32", name: "poolId", type: "bytes32" }],
+    name: "cancelPool",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "bytes32", name: "poolId", type: "bytes32" }],
+    name: "claim",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "bytes32", name: "poolId", type: "bytes32" }],
+    name: "getEffectiveStatus",
+    outputs: [
+      { internalType: "enum SachetMarket.PoolStatus", name: "", type: "uint8" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "bytes32", name: "poolId", type: "bytes32" }],
+    name: "getPool",
+    outputs: [
+      {
+        components: [
+          { internalType: "uint64", name: "expiresAt", type: "uint64" },
           {
-            "name": "expiresAt",
-            "type": "uint64",
-            "internalType": "uint64"
+            internalType: "enum SachetMarket.PoolStatus",
+            name: "status",
+            type: "uint8",
           },
           {
-            "name": "status",
-            "type": "uint8",
-            "internalType": "enum SachetMarket.PoolStatus"
+            internalType: "enum SachetMarket.Outcome",
+            name: "result",
+            type: "uint8",
           },
+          { internalType: "uint256", name: "poolHome", type: "uint256" },
+          { internalType: "uint256", name: "poolDraw", type: "uint256" },
+          { internalType: "uint256", name: "poolAway", type: "uint256" },
+          { internalType: "uint256", name: "totalPool", type: "uint256" },
+          { internalType: "uint256", name: "totalClaimed", type: "uint256" },
+          { internalType: "uint256", name: "rakeBps", type: "uint256" },
+        ],
+        internalType: "struct SachetMarket.Pool",
+        name: "",
+        type: "tuple",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "bytes32", name: "role", type: "bytes32" }],
+    name: "getRoleAdmin",
+    outputs: [{ internalType: "bytes32", name: "", type: "bytes32" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "bytes32", name: "poolId", type: "bytes32" },
+      { internalType: "address", name: "user", type: "address" },
+    ],
+    name: "getUserStake",
+    outputs: [
+      {
+        components: [
+          { internalType: "uint256", name: "amount", type: "uint256" },
           {
-            "name": "result",
-            "type": "uint8",
-            "internalType": "enum SachetMarket.Outcome"
+            internalType: "enum SachetMarket.Outcome",
+            name: "outcome",
+            type: "uint8",
           },
-          {
-            "name": "poolHome",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "poolDraw",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "poolAway",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "totalPool",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "totalClaimed",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "rakeBps",
-            "type": "uint256",
-            "internalType": "uint256"
-          }
-        ]
-      }
+          { internalType: "bool", name: "claimed", type: "bool" },
+        ],
+        internalType: "struct SachetMarket.Bet",
+        name: "",
+        type: "tuple",
+      },
     ],
-    "stateMutability": "view"
+    stateMutability: "view",
+    type: "function",
   },
   {
-    "type": "function",
-    "name": "getRoleAdmin",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
+    inputs: [
+      { internalType: "bytes32", name: "role", type: "bytes32" },
+      { internalType: "address", name: "account", type: "address" },
     ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "stateMutability": "view"
+    name: "grantRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
   },
   {
-    "type": "function",
-    "name": "getUserStake",
-    "inputs": [
+    inputs: [
+      { internalType: "bytes32", name: "role", type: "bytes32" },
+      { internalType: "address", name: "account", type: "address" },
+    ],
+    name: "hasRole",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "bytes32", name: "poolId", type: "bytes32" },
+      { internalType: "uint64", name: "expiresAt", type: "uint64" },
+    ],
+    name: "launchPool",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "pause",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "paused",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "bytes32", name: "poolId", type: "bytes32" },
       {
-        "name": "poolId",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        internalType: "enum SachetMarket.Outcome",
+        name: "outcome",
+        type: "uint8",
+      },
+      { internalType: "uint256", name: "amount", type: "uint256" },
+    ],
+    name: "placeBet",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "bytes32", name: "", type: "bytes32" }],
+    name: "pools",
+    outputs: [
+      { internalType: "uint64", name: "expiresAt", type: "uint64" },
+      {
+        internalType: "enum SachetMarket.PoolStatus",
+        name: "status",
+        type: "uint8",
       },
       {
-        "name": "user",
-        "type": "address",
-        "internalType": "address"
-      }
+        internalType: "enum SachetMarket.Outcome",
+        name: "result",
+        type: "uint8",
+      },
+      { internalType: "uint256", name: "poolHome", type: "uint256" },
+      { internalType: "uint256", name: "poolDraw", type: "uint256" },
+      { internalType: "uint256", name: "poolAway", type: "uint256" },
+      { internalType: "uint256", name: "totalPool", type: "uint256" },
+      { internalType: "uint256", name: "totalClaimed", type: "uint256" },
+      { internalType: "uint256", name: "rakeBps", type: "uint256" },
     ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct SachetMarket.Bet",
-        "components": [
-          {
-            "name": "amount",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "outcome",
-            "type": "uint8",
-            "internalType": "enum SachetMarket.Outcome"
-          },
-          {
-            "name": "claimed",
-            "type": "bool",
-            "internalType": "bool"
-          }
-        ]
-      }
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "rakeBps",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "bytes32", name: "role", type: "bytes32" },
+      { internalType: "address", name: "callerConfirmation", type: "address" },
     ],
-    "stateMutability": "view"
+    name: "renounceRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
   },
   {
-    "type": "function",
-    "name": "grantRole",
-    "inputs": [
+    inputs: [
+      { internalType: "bytes32", name: "poolId", type: "bytes32" },
       {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        internalType: "enum SachetMarket.Outcome",
+        name: "result",
+        type: "uint8",
       },
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
+    name: "resolvePool",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
   },
   {
-    "type": "function",
-    "name": "hasRole",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
+    inputs: [
+      { internalType: "bytes32", name: "role", type: "bytes32" },
+      { internalType: "address", name: "account", type: "address" },
     ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
+    name: "revokeRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "sachetMarketToken",
+    outputs: [{ internalType: "contract IERC20", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "newRake", type: "uint256" }],
+    name: "setRakeBps",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "bytes4", name: "interfaceId", type: "bytes4" }],
+    name: "supportsInterface",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "unpause",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "newToken", type: "address" }],
+    name: "updateToken",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "bytes32", name: "poolId", type: "bytes32" }],
+    name: "withdrawBet",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "token", type: "address" },
+      { internalType: "address", name: "to", type: "address" },
+      { internalType: "uint256", name: "amount", type: "uint256" },
     ],
-    "stateMutability": "view"
+    name: "withdrawTreasury",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
   },
-  {
-    "type": "function",
-    "name": "launchPool",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expiresAt",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "pause",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "paused",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "placeBet",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "outcome",
-        "type": "uint8",
-        "internalType": "enum SachetMarket.Outcome"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "pools",
-    "inputs": [
-      {
-        "name": "",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "expiresAt",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "status",
-        "type": "uint8",
-        "internalType": "enum SachetMarket.PoolStatus"
-      },
-      {
-        "name": "result",
-        "type": "uint8",
-        "internalType": "enum SachetMarket.Outcome"
-      },
-      {
-        "name": "poolHome",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "poolDraw",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "poolAway",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "totalPool",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "totalClaimed",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "rakeBps",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "renounceRole",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "callerConfirmation",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "resolvePool",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "result",
-        "type": "uint8",
-        "internalType": "enum SachetMarket.Outcome"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "revokeRole",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      },
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "sachetMarketToken",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract IERC20"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "setRakeBps",
-    "inputs": [
-      {
-        "name": "newRake",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "supportsInterface",
-    "inputs": [
-      {
-        "name": "interfaceId",
-        "type": "bytes4",
-        "internalType": "bytes4"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "unpause",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "updateToken",
-    "inputs": [
-      {
-        "name": "newToken",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "withdrawBet",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "withdrawTreasury",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "to",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "event",
-    "name": "BetPlaced",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "user",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "outcome",
-        "type": "uint8",
-        "indexed": false,
-        "internalType": "enum SachetMarket.Outcome"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "BetWithdrawn",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "user",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "Claimed",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "user",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "payout",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "Paused",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PoolCancelled",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PoolLaunched",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "expiresAt",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PoolResolved",
-    "inputs": [
-      {
-        "name": "poolId",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "result",
-        "type": "uint8",
-        "indexed": false,
-        "internalType": "enum SachetMarket.Outcome"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RakeUpdated",
-    "inputs": [
-      {
-        "name": "oldRake",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "newRake",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RoleAdminChanged",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "previousAdminRole",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "newAdminRole",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RoleGranted",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "sender",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RoleRevoked",
-    "inputs": [
-      {
-        "name": "role",
-        "type": "bytes32",
-        "indexed": true,
-        "internalType": "bytes32"
-      },
-      {
-        "name": "account",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "sender",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "TokenUpdated",
-    "inputs": [
-      {
-        "name": "oldToken",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newToken",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "TreasuryWithdrawn",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "to",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "Unpaused",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "AccessControlBadConfirmation",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AccessControlUnauthorizedAccount",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "neededRole",
-        "type": "bytes32",
-        "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "AlreadyClaimed",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AlreadyResolvedOrCancelled",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AmountExceedsBalance",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "AmountMustBeGreaterThan0",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "CannotChangeOutcome",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "EnforcedPause",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ExpectedPause",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ExpiresatExceedsMaxDuration",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ExpiresatInPast",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidOutcome",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidRake",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "InvalidResult",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NoActiveBet",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NoClaimableBet",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NotResolvedOrCancelled",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PoolAlreadyExists",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PoolClosed",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PoolDoesNotExist",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PoolNotOpen",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PoolStillOpen",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ReceivedAmountMustBeGreaterThan0",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ReentrancyGuardReentrantCall",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "SafeERC20FailedOperation",
-    "inputs": [
-      {
-        "name": "token",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "SweepFirst",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "TooLateToWithdraw",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ZeroAddress",
-    "inputs": []
-  }
 ] as const;

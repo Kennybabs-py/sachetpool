@@ -46,7 +46,7 @@ const OUTCOMES: { key: Selection; label: string }[] = [
 const QUICK_STAKES = ["1", "5", "10", "25"];
 const isPostHogConfigured = Boolean(
   process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
-    process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  process.env.NEXT_PUBLIC_POSTHOG_HOST,
 );
 
 type Phase = "idle" | "approving" | "betting" | "done";
@@ -90,7 +90,6 @@ export function BetSheet({
     args: address && MARKET_ADDRESS ? [address, MARKET_ADDRESS] : undefined,
     query: { enabled: Boolean(address && TOKEN_ADDRESS && MARKET_ADDRESS) },
   });
-
 
   // Keep the last real selection so the sheet still shows content while it
   // animates closed (selection becomes null the moment we start closing).
