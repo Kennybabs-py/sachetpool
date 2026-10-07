@@ -7,6 +7,7 @@ import {
   metaMaskWallet,
   zerionWallet,
 } from "@rainbow-me/rainbowkit/wallets";
+import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 
 const WALLET_CONNECT_PROJECT_ID = process.env
   .NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID as string;
@@ -44,11 +45,32 @@ const connectors = connectorsForWallets(
   },
 );
 
-export const rainbowkitConfig = createConfig({
+export const rainbowkitConfig_ = createConfig({
   connectors,
   chains: [chain],
   transports: {
     [chain.id]: http(RPC_URL),
   },
   ssr: true,
+});
+
+export const rainbowkitConfig = getDefaultConfig({
+  appName: "Sachet Pool",
+  projectId: WALLET_CONNECT_PROJECT_ID,
+  appUrl: APP_URL,
+  chains: [chain],
+  transports: {
+    [chain.id]: http(RPC_URL),
+  },
+  wallets: [
+    {
+      groupName: "Recommended",
+      wallets: [
+        rainbowWallet,
+        walletConnectWallet,
+        metaMaskWallet,
+        zerionWallet,
+      ],
+    },
+  ],
 });
