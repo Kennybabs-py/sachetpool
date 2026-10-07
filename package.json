@@ -30,6 +30,7 @@
     "@rainbow-me/rainbowkit": "^2.2.11",
     "@rainbow-me/rainbowkit-siwe-next-auth": "^0.6.0",
     "@tanstack/react-query": "^5.103.1",
+    "@walletconnect/ethereum-provider": "^2.25.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.3.0",
     "dotenv": "^18.0.1",
@@ -61,5 +62,8 @@
     "typescript": "^5",
     "vitest": "^3.2.4"
   },
-  "packageManager": "yarn@4.18.0"
+  "packageManager": "yarn@4.18.0",
+  "resolutions": {
+    "@coinbase/cdp-sdk": "1.45.0"
+  }
 }

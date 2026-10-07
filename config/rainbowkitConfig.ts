@@ -5,35 +5,30 @@ import {
   rainbowWallet,
   walletConnectWallet,
   phantomWallet,
-  zerionWallet,
   metaMaskWallet,
-  base,
-  binanceWallet,
-  bitgetWallet,
-  bitskiWallet,
-  bitverseWallet,
-  braveWallet,
-  bybitWallet,
-  krakenWallet,
-  kresusWallet,
-  ledgerWallet,
-  magicEdenWallet,
-  mewWallet,
-  mecoWallet,
-  nestWallet,
-  novaWallet,
-  oktoWallet,
   okxWallet,
   rabbyWallet,
-  readyWallet,
   safeWallet,
-  uniswapWallet,
-  valoraWallet,
+  zerionWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 
 const WALLET_CONNECT_PROJECT_ID = process.env
   .NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID as string;
+// WalletConnect's metadata `url` is required for its mobile deep-link flow; fall
+// back to the live origin so a deploy that forgets NEXT_PUBLIC_APP_URL still works.
+const APP_URL =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (typeof window !== "undefined" ? window.location.origin : undefined);
 
+/**
+ * Kept deliberately short.
+ *
+ * RainbowKit's ConnectModal does not constrain a long wallet list on small
+ * screens: past the viewport height the rows land in an `overflow-hidden`
+ * ancestor with no scroll container, so on mobile the list is clipped and
+ * un-scrollable — users tap and nothing happens. A short list always fits.
+ * Add wallets sparingly and re-check the mobile modal when you do.
+ */
 const connectors = connectorsForWallets(
   [
     {
@@ -41,41 +36,11 @@ const connectors = connectorsForWallets(
       wallets: [
         rainbowWallet,
         walletConnectWallet,
+        metaMaskWallet,
         phantomWallet,
-        zerionWallet,
-        metaMaskWallet,
-        base,
-
-        binanceWallet,
-        bitgetWallet,
-        bitskiWallet,
-        bitverseWallet,
-        braveWallet,
-        bybitWallet,
-
-        krakenWallet,
-        kresusWallet,
-        ledgerWallet,
-        magicEdenWallet,
-        metaMaskWallet,
-        mewWallet,
-        mecoWallet,
-        nestWallet,
-        novaWallet,
-        oktoWallet,
         okxWallet,
-
-        phantomWallet,
         rabbyWallet,
-        rainbowWallet,
-        readyWallet,
-
         safeWallet,
-
-        uniswapWallet,
-        valoraWallet,
-        walletConnectWallet,
-
         zerionWallet,
       ],
     },
@@ -83,6 +48,7 @@ const connectors = connectorsForWallets(
   {
     appName: "Sachet Pool",
     projectId: WALLET_CONNECT_PROJECT_ID,
+    appUrl: APP_URL,
   },
 );
 
