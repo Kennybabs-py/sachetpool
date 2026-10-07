@@ -1,5 +1,5 @@
 "use client";
-import { useConnection, useReadContract } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 
 import { TOKEN_ADDRESS, TOKEN_DECIMALS, TOKEN_SYMBOL } from "@/config/chains";
 import { erc20Abi } from "@/lib/contracts/erc20";
@@ -17,7 +17,7 @@ import { formatToken } from "@/lib/format";
  * tell "not loaded" apart from a genuine zero balance.
  */
 export function useSachBalance() {
-  const { address, isConnected } = useConnection();
+  const { address, isConnected } = useAccount();
 
   const { data, refetch, isLoading, isError } = useReadContract({
     abi: erc20Abi,

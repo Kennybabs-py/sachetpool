@@ -18,7 +18,7 @@ import { erc20Abi } from "@/lib/contracts/erc20";
 import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
 import { useSachBalance } from "@/hooks/use-sach-balance";
 import {
-  useConnection,
+  useAccount,
   usePublicClient,
   useReadContract,
   useWriteContract,
@@ -76,7 +76,7 @@ export function BetSheet({
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const { address, isConnected } = useConnection();
+  const { address, isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
   const publicClient = usePublicClient();
   const { mutateAsync } = useWriteContract();

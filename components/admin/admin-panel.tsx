@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import posthog from "posthog-js";
 import { Check, Search } from "lucide-react";
-import { useConnection, usePublicClient, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import type { MatchCandidate, AdminPool } from "@/lib/pools";
 import { outcomeToCode, type OnchainOutcome } from "@/lib/onchain";
 import {
@@ -85,7 +85,7 @@ function formatKickoff(date: Date): string {
 
 function OpenPoolSection({ candidates }: { candidates: MatchCandidate[] }) {
   const router = useRouter();
-  const { isConnected } = useConnection();
+  const { isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { mutateAsync } = useWriteContract();
   const [pending, startTransition] = useTransition();
@@ -316,7 +316,7 @@ function ResolveSection({ pools }: { pools: AdminPool[] }) {
 
 function ResolveRow({ pool }: { pool: AdminPool }) {
   const router = useRouter();
-  const { isConnected } = useConnection();
+  const { isConnected } = useAccount();
   const publicClient = usePublicClient();
   const { mutateAsync } = useWriteContract();
   const [pending, startTransition] = useTransition();

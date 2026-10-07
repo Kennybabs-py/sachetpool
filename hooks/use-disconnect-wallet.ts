@@ -1,10 +1,10 @@
 import { signOut } from "next-auth/react";
 import posthog from "posthog-js";
-import { useConnection, useDisconnect } from "wagmi";
+import { useAccount, useDisconnect } from "wagmi";
 
 const isPostHogConfigured = Boolean(
   process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
-    process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  process.env.NEXT_PUBLIC_POSTHOG_HOST,
 );
 
 /**
@@ -15,7 +15,7 @@ const isPostHogConfigured = Boolean(
  * the mobile nav sheet so the teardown stays identical in both.
  */
 export function useDisconnectWallet() {
-  const { isConnected } = useConnection();
+  const { isConnected } = useAccount();
   const { disconnect } = useDisconnect();
 
   return async function disconnectWallet() {
