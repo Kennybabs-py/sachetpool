@@ -83,7 +83,7 @@ contract SachetMarketTest is Test {
         vm.prank(admin);
         escrow.launchPool(bytes32(0), uint64(block.timestamp + 1 days));
         
-        (uint64 expiresAt,,,,,,,) = escrow.pools(bytes32(0));
+        (uint64 expiresAt,,,,,,,,) = escrow.pools(bytes32(0));
         assertEq(expiresAt, uint64(block.timestamp + 1 days));
     }
 
@@ -208,7 +208,7 @@ contract SachetMarketTest is Test {
         assertEq(amount, 0);
 
         
-        (,,,,,,uint256 totalPool,) = escrow.pools(bytes32(0));
+        (,,,,,,uint256 totalPool,,) = escrow.pools(bytes32(0));
         assertEq(totalPool, 0);
         assertEq(token.balanceOf(address(escrow)), 0);
     }
@@ -461,7 +461,7 @@ contract SachetMarketTest is Test {
         vm.prank(charlie); escrow.placeBet(bytes32(0), SachetMarket.Outcome.AWAY, amount3);
         
         uint256 expectedTotalPool = uint256(amount1) + amount2 + amount3;
-        (,,,,,,uint256 totalPool,) = escrow.pools(bytes32(0));
+        (,,,,,,uint256 totalPool,,) = escrow.pools(bytes32(0));
         assertEq(totalPool, expectedTotalPool);
         
         vm.warp(block.timestamp + 2 days);
