@@ -38,6 +38,7 @@ enum PoolStatus {
   LOCKED
   RESOLVED
   VOID
+  CANCELLED
 }
 
 enum Selection {
@@ -46,14 +47,17 @@ enum Selection {
   AWAY
 }
 
-/// Mirrored bet lifecycle. `WON`/`VOID` mean claimable on-chain; `CLAIMED`
-/// means the pull-payment has been withdrawn.
+/// Mirrored bet lifecycle. `PENDING` is a live stake that can still be topped
+/// up or withdrawn; `WON`/`VOID` are claimable on-chain; `CLAIMED` means the
+/// payout was withdrawn; `WITHDRAWN` means the bettor pulled their stake before
+/// the pool locked.
 enum BetStatus {
   PENDING
   WON
   LOST
   VOID
   CLAIMED
+  WITHDRAWN
 }
 
 /// Wallet identity. The lowercase address is the primary identity everywhere.
@@ -96,15 +100,19 @@ model Pool {
   onchainPoolId    String      @unique
   type             PoolType    @default(RESULT_1X2)
   status           PoolStatus  @default(PENDING_ONCHAIN)
-  rakeBps          Int         @default(0)
   /// Selection expiry; betting is rejected on-chain from this instant.
   closesAt         DateTime
+  /// Rake snapshotted on-chain at launch (basis points); the contract pays
+  /// winners using this, not the current global rake, so the mirror stores it.
+  rakeBps          Int         @default(0)
   createdBy        String?
   createTxHash     String?
-  totalStake       BigInt      @default(0)
-  stakeHome        BigInt      @default(0)
-  stakeDraw        BigInt      @default(0)
-  stakeAway        BigInt      @default(0)
+  /// `numeric(78, 0)`: token amounts are uint256-scale and overflow postgres
+  /// `bigint` past ~9.22 tokens at 18 decimals, so they are stored as decimal.
+  totalStake       Decimal     @default(0) @db.Decimal(78, 0)
+  stakeHome        Decimal     @default(0) @db.Decimal(78, 0)
+  stakeDraw        Decimal     @default(0) @db.Decimal(78, 0)
+  stakeAway        Decimal     @default(0) @db.Decimal(78, 0)
   winningSelection Selection?
   resolvedTxHash   String?
   settledAt        DateTime?
@@ -116,6 +124,10 @@ model Pool {
   @@index([status])
 }
 
+/// A wallet's position in one pool — one row per (pool, address), mirroring the
+/// contract's `bets[poolId][user]` struct. `placeBet` tops the stake up (same
+/// outcome), `withdrawBet` zeroes it before the pool locks, so `amount` is the
+/// *current* live stake and `txHash` points at the event that last touched it.
 model Bet {
   id          String    @id @default(cuid())
   poolId      String
@@ -125,9 +137,13 @@ model Bet {
   /// Lowercase address that placed the bet (denormalised for history reads).
   address     String
   selection   Selection
-  amount      BigInt
+  /// Current live stake; 0 once withdrawn. uint256-scale (see `Pool.totalStake`).
+  amount      Decimal   @db.Decimal(78, 0)
   status      BetStatus @default(PENDING)
-  payout      BigInt    @default(0)
+  payout      Decimal   @default(0) @db.Decimal(78, 0)
+  /// True once the on-chain `claim` marked the bet settled.
+  claimed     Boolean   @default(false)
+  /// Last event that touched this stake (place, top-up, or withdraw).
   txHash      String
   logIndex    Int
   blockNumber BigInt
@@ -135,8 +151,7 @@ model Bet {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  @@unique([txHash, logIndex])
-  @@index([poolId])
+  @@unique([poolId, address])
   @@index([status])
   @@index([userId])
   @@index([address])

@@ -1,6 +1,7 @@
 import { PrimaryLink } from "@/components/common/primary-link";
 
 import { MarketBoard } from "./market-board";
+import GetSach from "../common/get-sach";
 
 const TRUST = [
   "One pool per match",
@@ -73,6 +74,8 @@ export function Hero() {
               </li>
             ))}
           </ul>
+
+          <GetSach />
         </div>
 
         <MarketBoard />

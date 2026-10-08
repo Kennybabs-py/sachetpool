@@ -35,6 +35,7 @@ const STATUS: Record<BetStatus, { label: string; className: string }> = {
   LOST: { label: "Lost", className: "bg-muted text-muted-foreground" },
   VOID: { label: "Void", className: "bg-muted text-muted-foreground" },
   CLAIMED: { label: "Claimed", className: "bg-primary/10 text-primary" },
+  WITHDRAWN: { label: "Withdrawn", className: "bg-muted text-muted-foreground" },
 };
 
 export function BetRow({ bet }: { bet: BetRowData }) {
@@ -85,6 +86,9 @@ export function BetRow({ bet }: { bet: BetRowData }) {
         )}
         {bet.status === "VOID" && !bet.claimable && (
           <span className="shrink-0">Refunded</span>
+        )}
+        {bet.status === "WITHDRAWN" && (
+          <span className="shrink-0">Withdrawn</span>
         )}
       </div>
       {bet.claimable && (

@@ -6,7 +6,7 @@ import {
   isVoided,
   type NormalisedFixture,
 } from "@/services/football.service";
-import { operatorResolvePool } from "./market";
+import { resolvePool } from "./market";
 import { OUTCOME_CODE, outcomeFromScore } from "./onchain";
 
 /**
@@ -156,7 +156,7 @@ export async function settleFinishedMatches(
       });
       for (const pool of candidate.pools) {
         try {
-          await operatorResolvePool(
+          await resolvePool(
             pool.onchainPoolId as `0x${string}`,
             OUTCOME_CODE.VOID,
           );
@@ -182,10 +182,7 @@ export async function settleFinishedMatches(
       });
       for (const pool of candidate.pools) {
         try {
-          await operatorResolvePool(
-            pool.onchainPoolId as `0x${string}`,
-            outcome,
-          );
+          await resolvePool(pool.onchainPoolId as `0x${string}`, outcome);
           settled++;
         } catch (err) {
           console.error(`Failed to resolve pool ${pool.id}:`, err);

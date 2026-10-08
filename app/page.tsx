@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { SiteHeader } from "@/components/landing/site-header";
 import { Hero } from "@/components/landing/hero";
 import { HowItWorks } from "@/components/landing/how-it-works";
+import { Community } from "@/components/landing/community";
 import { SiteFooter } from "@/components/landing/site-footer";
 
 export const metadata: Metadata = {
@@ -19,6 +20,7 @@ export default function LandingPage() {
       <main className="flex-1">
         <Hero />
         <HowItWorks />
+        <Community />
       </main>
       <SiteFooter />
     </div>

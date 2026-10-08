@@ -56,7 +56,7 @@ export function MarketBoard() {
                 <span className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
                   {outcome.label}
                 </span>
-                <span className="relative block h-[3px] w-full overflow-hidden bg-muted">
+                <span className="relative block h-0.75 w-full overflow-hidden bg-muted">
                   <span
                     className="bar-fill absolute inset-y-0 left-0 block bg-foreground"
                     style={{
@@ -88,7 +88,7 @@ export function MarketBoard() {
             Void → full refund
           </span>
           <span className="border border-border px-2.5 py-1 font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
-            Rake ≤ 10%
+            Rake on-chain
           </span>
           <span className="border border-border px-2.5 py-1 font-mono text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
             Claim anytime

@@ -1,5 +1,6 @@
 import { assertCronAuthorized } from "@/lib/cron-auth";
 import { syncFixtures } from "@/lib/football-sync";
+import { logPostHog } from "@/lib/posthog-logs";
 import {
   FootballService,
   FootballApiError,
@@ -36,7 +37,11 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const date = body.date ?? new Date().toISOString().slice(0, 10);
+  // const date = body.date ?? new Date().toISOString().slice(0, 10);
+  const currentDate = new Date();
+  currentDate.setDate(currentDate.getDate() + 4);
+  const date = body?.date ?? currentDate.toISOString().slice(0, 10);
+
   const { league, season, provider } = body;
 
   if (league === undefined || league === null || league === "") {
@@ -49,7 +54,10 @@ export async function POST(req: Request) {
     );
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return Response.json({ error: "`date` must be YYYY-MM-DD" }, { status: 400 });
+    return Response.json(
+      { error: "`date` must be YYYY-MM-DD" },
+      { status: 400 },
+    );
   }
 
   try {
@@ -57,6 +65,11 @@ export async function POST(req: Request) {
       ? new FootballService(provider)
       : FootballService.fromEnv();
     const result = await syncFixtures(service, { date, league, season });
+    await logPostHog("fixture_sync_completed", {
+      provider: result.provider,
+      fetched: result.fetched,
+      upserted: result.upserted,
+    });
     return Response.json({ ok: true, date, league, season, ...result });
   } catch (err) {
     if (err instanceof FootballApiError) {

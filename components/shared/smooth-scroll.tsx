@@ -37,17 +37,19 @@ export function SmoothScroll({ children }: { children: ReactNode }) {
 
   if (reducedMotion) return <>{children}</>;
 
-  return (
-    <ReactLenis
-      root
-      options={{
-        autoRaf: true,
-        anchors: true,
-        duration: 1.05,
-        smoothWheel: true,
-      }}
-    >
-      {children}
-    </ReactLenis>
-  );
+  // return (
+  //   <ReactLenis
+  //     root
+  //     options={{
+  //       autoRaf: true,
+  //       anchors: true,
+  //       duration: 1.05,
+  //       smoothWheel: true,
+  //     }}
+  //   >
+  //     {children}
+  //   </ReactLenis>
+  // );
+
+  return <> {children}</>;
 }

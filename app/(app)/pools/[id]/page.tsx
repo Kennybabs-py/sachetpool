@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPoolDetailData } from "@/lib/pools";
+import { getUserPoolStake } from "@/lib/bets";
+import { getSessionUser } from "@/lib/session";
 import { PoolCard } from "@/components/pools/pool-card";
+import { PoolReturns } from "@/components/pools/pool-returns";
 import { formatToken } from "@/lib/format";
 import { TOKEN_DECIMALS, TOKEN_SYMBOL } from "@/config/chains";
+import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -19,16 +23,25 @@ export default async function PoolDetailPage({
 
   const resolved = pool.status === "RESOLVED" || pool.status === "VOID";
 
+  const user = await getSessionUser();
+  const userStake = user
+    ? await getUserPoolStake(user.address, pool.poolId)
+    : null;
+
   return (
     <div className="flex flex-col gap-4">
       <Link
         href="/board"
-        className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+        className="flex items-center justify-start gap-2 text-[1rem] text-foreground transition-colors hover:text-foreground"
       >
-        ← Board
+        <ArrowLeft /> Board
       </Link>
 
-      <PoolCard pool={pool} serverNowMs={serverNowMs} />
+      <PoolCard pool={pool} serverNowMs={serverNowMs} showDetailLink={false} />
+
+      {pool.status === "OPEN" && (
+        <PoolReturns pool={pool} defaultStake={userStake} />
+      )}
 
       {resolved && (
         <div className="rounded-2xl border border-border bg-card p-4 text-sm">

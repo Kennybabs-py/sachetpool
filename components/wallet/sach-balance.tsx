@@ -1,29 +1,24 @@
 "use client";
 
-import { useAccount, useReadContract } from "wagmi";
-import { erc20Abi } from "@/lib/contracts/erc20";
-import { TOKEN_ADDRESS, TOKEN_DECIMALS, TOKEN_SYMBOL } from "@/config/chains";
-import { formatToken } from "@/lib/format";
+import { useSachBalance } from "@/hooks/use-sach-balance";
+import { TOKEN_SYMBOL } from "@/config/chains";
+import { cn } from "@/lib/utils";
 
-/** Live `$SACH` balance for the connected wallet. */
-export function SachBalance() {
-  const { address, isConnected } = useAccount();
-
-  const { data } = useReadContract({
-    address: TOKEN_ADDRESS,
-    abi: erc20Abi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: Boolean(address && TOKEN_ADDRESS) },
-  });
-
-  if (!isConnected) return null;
+/** Live `$SACH` balance row, shown inside the wallet menu. */
+export function SachBalance({ className }: { className?: string }) {
+  const { formatted, isConnected } = useSachBalance();
 
   return (
-    <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium tabular-nums text-muted-foreground">
-      {data !== undefined
-        ? `${formatToken(data, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}`
-        : `— ${TOKEN_SYMBOL}`}
-    </span>
+    <div
+      className={cn(
+        "flex items-center justify-between gap-4 px-2 py-1.5",
+        className,
+      )}
+    >
+      <span className="text-xs text-muted-foreground">Balance</span>
+      <span className="font-mono text-xs font-medium tabular-nums text-foreground">
+        {isConnected && formatted ? formatted : `— ${TOKEN_SYMBOL}`}
+      </span>
+    </div>
   );
 }

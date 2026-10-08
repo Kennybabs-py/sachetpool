@@ -2,10 +2,11 @@
 
 Engineer's guide to `SachetMarket` — the on-chain pari-mutuel engine behind
 Sachet Market. It covers the interface, the payout math, the security model, how
-to build/test/deploy, and exactly what is implemented today versus what remains.
+to build/test/deploy, and exactly what is implemented today and the current protocol capabilities.
+
 
 - **Source:** `contracts/src/SachetMarket.sol`
-- **Tests:** `contracts/test/SachetMarket.t.sol` (25 passing) + `contracts/test/mocks/MockERC20.sol`
+- **Tests:** `contracts/test/SachetMarket.t.sol` (30 passing)
 - **Config:** `contracts/foundry.toml`
 - **Off-chain mirror:** `lib/odds.ts`, `lib/onchain.ts`, `lib/market.ts`, `lib/indexer.ts`
 
@@ -13,9 +14,9 @@ to build/test/deploy, and exactly what is implemented today versus what remains.
 
 ## 1. What the contract is
 
-A single deployed contract escrows all `$SACH` stakes for every match. The
-operator (a server-held key) opens and resolves pools; bettors stake and later
-**pull** their payout. There is no order book, no oracle, no per-match
+A single deployed contract escrows all stakes for every match. The
+admins open pools, resolvers provide final outcomes, and bettors stake and later
+**pull** their payout or refund. There is no order book, no oracle, no per-match
 contract — one singleton, many logical pools keyed by `bytes32`.
 
 Design goals:
@@ -24,107 +25,105 @@ Design goals:
   is only a mirror.
 - **Deterministic pool ids.** One pool per match, derived off-chain so both
   sides agree without a registry.
-- **Tiny trusted surface.** The operator can only open pools, resolve them, and
-  sweep accrued rake. It can never touch user stakes directly.
+- **Tiny trusted surface.** Admins launch pools, Resolvers finalize outcomes. They
+  can never touch user stakes directly.
 - **Exact off-chain parity.** `lib/odds.ts` reproduces the payout math and is
   unit-tested against the same numbers (see `lib/odds.test.ts`).
+- **Flexible Token and Treasury.** The betting token can be dynamically updated by an admin (when the market is paused), and generic tokens can be withdrawn via `withdrawTreasury`.
+- **Configurable Rake.** A global `rakeBps` (min 1, max 10 basis points) is deducted from the total pool before distributing winnings to the correct outcome backers. The rake stays in the contract to be collected via `withdrawTreasury`.
 
 ---
 
 ## 2. Interface
 
-Solidity `^0.8.24`, inherits OpenZeppelin `ReentrancyGuard`, uses `SafeERC20`.
+Solidity `^0.8.24`, inherits OpenZeppelin `AccessControl`, `ReentrancyGuard`, and `Pausable`. Uses `SafeERC20`.
 
-### Constants
+### Constants & Roles
 
-| Name                 | Type     | Value   | Meaning                  |
-| -------------------- | -------- | ------- | ------------------------ |
-| `OUTCOME_UNRESOLVED` | `uint8`  | `0`     | No result yet.           |
-| `HOME`               | `uint8`  | `1`     | Home win.                |
-| `DRAW`               | `uint8`  | `2`     | Draw.                    |
-| `AWAY`               | `uint8`  | `3`     | Away win.                |
-| `VOID`               | `uint8`  | `4`     | Cancelled → full refund. |
-| `MAX_RAKE_BPS`       | `uint16` | `1000`  | Rake cap (10%).          |
-| `BPS_DENOMINATOR`    | `uint16` | `10000` | Basis-point denominator. |
+| Name                 | Meaning                                           |
+| -------------------- | ------------------------------------------------- |
+| `ADMIN_ROLE`         | Can pause, update token, launch/cancel pools, and sweep treasury. |
+| `RESOLVER_ROLE`      | Can resolve pools with the final outcome.         |
+| `MAX_POOL_DURATION`  | Hardcoded to 30 days.                             |
 
-Selections accepted by `bet` are `1..3` only; `4` (VOID) is resolution-only.
+### Enums
+
+**Outcome**: `UNSET` (0), `HOME` (1), `DRAW` (2), `AWAY` (3), `VOID` (4)
+**PoolStatus**: `OPEN` (0), `LOCKED` (1), `RESOLVED` (2), `CANCELLED` (3)
 
 ### Immutables / storage
 
 ```solidity
-IERC20  public immutable token;      // $SACH that is escrowed
-address public immutable treasury;   // nominal rake recipient (constructor arg)
-address public operator;             // server hot key; can be rotated
-uint256 public minStake;             // minimum bet, token base units
-uint256 public treasuryBalance;      // accrued rake awaiting withdrawal
-mapping(bytes32 => Pool) private pools;
-mapping(bytes32 => mapping(address => uint256[3])) private userStake;
-mapping(bytes32 => mapping(address => bool)) public claimed;
+IERC20 public sachetMarketToken; // The active ERC20 token for wagering
+mapping(bytes32 => Pool) public pools;
+mapping(bytes32 => mapping(address => Bet)) public bets;
 ```
 
 ### `struct Pool`
 
 ```solidity
 struct Pool {
-    uint64  expiresAt;        // betting closes at this timestamp
-    uint16  rakeBps;          // rake for this pool (<= MAX_RAKE_BPS)
-    uint8   outcome;          // 0 unresolved, 1/2/3, 4 void
-    bool    exists;
-    bool    resolved;
-    bool    refundMode;       // true => everyone refunded, no rake
-    uint256 totalStake;
-    uint256[3] stakeBySelection; // [home, draw, away]
-    uint256 winningStake;
-    uint256 paidOut;
-    uint256 treasuryCredit;   // rake credited for this pool
+    uint64 expiresAt;
+    PoolStatus status;
+    Outcome result;
+    uint256 poolHome;
+    uint256 poolDraw;
+    uint256 poolAway;
+    uint256 totalPool;
+    uint256 totalClaimed; // Tracked for UI and analytics
 }
 ```
 
-### Constructor
+### `struct Bet`
 
 ```solidity
-constructor(address token_, address treasury_, address operator_, uint256 minStake_)
+struct Bet {
+    uint256 amount;
+    Outcome outcome;
+    bool claimed;
+}
 ```
 
-Reverts on any zero address: `token_`, `treasury_`, `operator_`.
+### Core Functions
 
-### Functions
-
-| Function                                                       | Access         | Notes                                                                                                                                                                                         |
-| -------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createPool(bytes32 poolId, uint64 expiresAt, uint16 rakeBps)` | `onlyOperator` | Reverts `PoolExists`, `ExpiryInPast` (`expiresAt <= block.timestamp`), `RakeTooHigh` (`> 1000`).                                                                                              |
-| `bet(bytes32 poolId, uint8 selection, uint256 amount)`         | anyone         | `nonReentrant`. Pulls `amount` via `transferFrom`. Reverts `PoolMissing`, `AlreadyResolved`, `BettingClosed` (at/after expiry), `InvalidSelection` (not 1–3), `StakeTooSmall` (`< minStake`). |
-| `resolve(bytes32 poolId, uint8 outcome)`                       | `onlyOperator` | Reverts `PoolMissing`, `AlreadyResolved`, `PoolNotExpired` (before expiry), `InvalidOutcome` (not 1–4). Sets `refundMode` for `VOID` **or** when `winningStake == 0`.                         |
-| `claim(bytes32 poolId)`                                        | anyone         | `nonReentrant`. Reverts `PoolMissing`, `NotResolved`, `AlreadyClaimed`, `NothingToClaim`. Pays refund (sum of all three stakes) or proportional win.                                          |
-| `setOperator(address)`                                         | `onlyOperator` | Zero-address guarded; emits `OperatorChanged`.                                                                                                                                                |
-| `setMinStake(uint256)`                                         | `onlyOperator` | Emits `MinStakeChanged`.                                                                                                                                                                      |
-| `withdrawTreasury(address to)`                                 | `onlyOperator` | Zero-address guarded; sweeps `treasuryBalance` to `to`.                                                                                                                                       |
-| `getPool(bytes32) → Pool`                                      | view           | Full pool struct.                                                                                                                                                                             |
-| `getUserStake(bytes32, address) → (uint256,uint256,uint256)`   | view           | Per-selection stake for a user.                                                                                                                                                               |
-| `claimed(bytes32, address) → bool`                             | view           | Public mapping.                                                                                                                                                                               |
+| Function                                                                 | Access         | Notes                                                                                                                                                             |
+| ------------------------------------------------------------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `launchPool(bytes32 poolId, uint64 expiresAt)`                           | `ADMIN_ROLE`   | Creates a pool. Reverts if expiry is in past or > 30 days.                                                                                                        |
+| `placeBet(bytes32 poolId, Outcome outcome, uint256 amount)`              | anyone         | Places or increases a bet. Reverts if paused or expired. `amount` must be > 0. Reverts if attempting to change outcome without withdrawing first.                 |
+| `withdrawBet(bytes32 poolId)`                                            | anyone         | Withdraws a user's bet before pool expiry, zeroing out their wager.                                                                                               |
+| `resolvePool(bytes32 poolId, Outcome result)`                            | `RESOLVER_ROLE`| Finalizes a pool's result. Must be at or after `expiresAt`.                                                                                                       |
+| `cancelPool(bytes32 poolId)`                                             | `ADMIN_ROLE`   | Emergency cancels an open pool, forcing a 100% refund.                                                                                                            |
+| `claim(bytes32 poolId)`                                                  | anyone         | Pulls payout for a winning bet, or refund if pool is `CANCELLED` or `VOID`.                                                                                       |
+| `updateToken(address newToken)`                                          | `ADMIN_ROLE`   | Dynamically changes the active betting token. Must be paused.                                                                                                     |
+| `setRakeBps(uint256 newRake)`                                            | `ADMIN_ROLE`   | Updates the global rake. Must be between 1 and 10 basis points.                                                                                                   |
+| `withdrawTreasury(address token, address to, uint256 amount)`            | `ADMIN_ROLE`   | Sweeps any ERC20 out of the contract. Must be paused. Passing `type(uint256).max` sweeps full balance.                                                            |
 
 ### Events
 
 ```solidity
-event PoolCreated(bytes32 indexed poolId, uint64 expiresAt, uint16 rakeBps);
-event BetPlaced(bytes32 indexed poolId, address indexed bettor, uint8 selection, uint256 amount);
-event PoolResolved(bytes32 indexed poolId, uint8 outcome, bool refundMode, uint256 winningStake, uint256 treasuryCredit);
-event Claimed(bytes32 indexed poolId, address indexed bettor, uint256 amount);
-event TreasuryWithdrawn(address indexed to, uint256 amount);
-event OperatorChanged(address indexed operator);
-event MinStakeChanged(uint256 minStake);
+event PoolLaunched(bytes32 indexed poolId, uint64 expiresAt);
+event BetPlaced(bytes32 indexed poolId, address indexed user, Outcome outcome, uint256 amount);
+event BetWithdrawn(bytes32 indexed poolId, address indexed user, uint256 amount);
+event PoolResolved(bytes32 indexed poolId, Outcome result);
+event PoolCancelled(bytes32 indexed poolId);
+event Claimed(bytes32 indexed poolId, address indexed user, uint256 payout);
+event TokenUpdated(address indexed oldToken, address indexed newToken);
+event TreasuryWithdrawn(address indexed token, address indexed to, uint256 amount);
+event RakeUpdated(uint256 oldRake, uint256 newRake);
 ```
 
-These are the exact events the indexer decodes (`lib/indexer.ts`). `PoolCreated`,
-`BetPlaced`, `PoolResolved`, `Claimed` drive state; the other three are recorded
+These are the exact events the indexer decodes (`lib/indexer.ts`). `PoolLaunched`,
+`BetPlaced`, `BetWithdrawn`, `PoolResolved`, `PoolCancelled`, `Claimed` drive state; the other two are recorded
 for audit only.
 
 ### Errors
 
-`NotOperator`, `PoolExists`, `PoolMissing`, `AlreadyResolved`, `NotResolved`,
-`BettingClosed`, `PoolNotExpired`, `InvalidSelection`, `InvalidOutcome`,
-`RakeTooHigh`, `ExpiryInPast`, `StakeTooSmall`, `AlreadyClaimed`,
-`NothingToClaim`. (Constructor/zero-address checks use `require` strings.)
+`AlreadyClaimed`, `AlreadyResolvedOrCancelled`, `AmountMustBeGreaterThan0`,
+`ExpiresatExceedsMaxDuration`, `ExpiresatInPast`, `InvalidOutcome`,
+`InvalidResult`, `NoActiveBet`, `NoClaimableBet`, `NotResolvedOrCancelled`,
+`PoolAlreadyExists`, `PoolClosed`, `PoolDoesNotExist`, `PoolNotOpen`,
+`PoolStillOpen`, `ReceivedAmountMustBeGreaterThan0`, `TooLateToWithdraw`,
+`ZeroAddress`, `AmountExceedsBalance`, `CannotChangeOutcome`, `InvalidRake`.
 
 ---
 
@@ -138,8 +137,8 @@ poolId = keccak256(utf8("sachet:1x2:" + match.externalId))
 
 `lib/onchain.ts::computeOnchainPoolId` is the single implementation; the admin
 action (`app/(app)/admin/actions.ts`) persists it on the `Pool` row and passes
-the same value to `createPool`. `createPool` also rejects a reused id
-(`PoolExists`), so the mapping is enforceable on-chain.
+the same value to `launchPool`. `launchPool` also rejects a reused id
+(`PoolAlreadyExists`), so the mapping is enforceable on-chain.
 
 ---
 
@@ -147,30 +146,18 @@ the same value to `createPool`. `createPool` also rejects a reused id
 
 All arithmetic is integer with floor division; amounts are token base units.
 
-```
-rake            = floor(totalStake * rakeBps / 10000)        // on resolve, only if there is a winner
-distributable   = totalStake - rake
-payout(user)    = floor(distributable * userStakeOnWinner / winningStake)
-refund(user)    = userStake[home] + userStake[draw] + userStake[away]   // refundMode
-```
-
-Rules:
-
-- **`VOID`** outcome → `refundMode = true`, `treasuryCredit = 0`, everyone gets
-  their exact stake back, no rake.
-- **Winning selection with zero stake** → also `refundMode = true`, no rake.
-  Nobody backed the winner, so refunding is the only fair outcome.
-- **Normal resolution** → `treasuryCredit = floor(totalStake * rakeBps / 10000)`
-  added to `treasuryBalance` at resolve time.
-- Claim is **once per pool per address** and pays from the already-reserved
-  `treasuryCredit`, so claimed sums can never exceed `distributable`
-  (fuzz-tested).
-- Rounding **dust stays in the contract**; `paidOut` and `treasuryBalance` track
-  what leaves.
+- **Distributing Winnings**: 
+  - `distributablePot` is `totalPool - (totalPool * rakeBps / 10000)`.
+  - `winningPool` is the total tokens wagered on the correct outcome.
+  - Payout is calculated as: `payout = (distributablePot * originalAmount) / winningPool`.
+- **Refunds (`VOID` or `CANCELLED`)**:
+  - Payout is exactly 100% of the original wager.
+- **Zero Winner Edge Case**:
+  - If no one backed the winning outcome, everyone loses their wager (stays trapped in the contract to be swept via `withdrawTreasury`).
 
 Off-chain parity lives in `lib/odds.ts`:
 
-- `rakeAmount`, `distributablePot`, `winnerPayout` — identical integer math.
+- `distributablePot`, `winnerPayout` — identical integer math (now with dynamic `rakeBps` configuration).
 - `projectPayout` — what a bet would return if the pool closed now.
 - `impliedMultiple` — display-only multiple for the board.
 
@@ -183,35 +170,27 @@ must change with it.
 
 **Trusted actors**
 
-- **Operator** (server hot key): can `createPool`, `resolve`, `setOperator`,
-  `setMinStake`, `withdrawTreasury`. Cannot move user stake except by correctly
-  resolving, and can only withdraw accrued `treasuryBalance`.
+- **Admin**: Can pause the market, change the token, launch/cancel pools, and sweep treasury.
+- **Resolver**: Only role capable of providing the outcome to a pool.
 - **Admin allowlist** (app layer, `ADMIN_ADDRESSES`): off-chain gate on who may
-  _trigger_ operator actions. It is not an on-chain role.
+  _trigger_ admin actions via the UI.
 
 **Bettors**: unprivileged; only their own tokens in/out.
 
 **Invariants**
 
-1. Sum of all `claim` payouts for a pool `<= totalStake - treasuryCredit`
-   (fuzz: `testFuzz_ClaimSumNeverExceedsDistributable`).
-2. A refund returns the exact stake (fuzz: `testFuzz_RefundAlwaysReturnsExactStake`).
-3. `treasuryBalance <= sum of rake on resolved pools`.
-4. A pool can be resolved at most once; a pool id can be created once.
-5. Betting is impossible at/after `expiresAt`; resolution is impossible before it.
-6. Token movements use `SafeERC20`; `bet` and `claim` are `nonReentrant` with
-   checks-effects-interactions (state updated before transfer).
+1. Users can safely withdraw their active bets any time before `expiresAt`.
+2. A pool cannot be bet on after `expiresAt`.
+3. Changing betting outcomes requires withdrawing the active bet first (setting `amount` to 0).
+4. Critical protocol updates (`updateToken`, `withdrawTreasury`) require the contract to be paused (`whenPaused`).
+5. All token transfers implement OpenZeppelin's `SafeERC20`.
+6. State changes occur before external calls (Checks-Effects-Interactions) inside `nonReentrant` functions.
+7. Token movements use `SafeERC20`; `placeBet`, `withdrawBet`, and `claim` are `nonReentrant`.
 
 **Known accepted trade-offs**
 
-- Rake is floored off the _total_ pot before being split; the dust remainder
-  stays locked in the contract (harmless, and bounded by wei-level rounding
-  across users).
-- `treasury` is immutable in the constructor, while `withdrawTreasury` takes a
-  recipient — the operator chooses where to sweep, which is intentional (the
-  constructor's `treasury` is the nominal owner and must be non-zero).
 - The contract assumes a standard, non-fee-on-transfer, non-rebasing ERC-20. A
-  fee-on-transfer token would break the escrow accounting; `$SACH` must be plain.
+  fee-on-transfer token would break the escrow accounting; the token must be plain.
 
 ---
 
@@ -236,7 +215,7 @@ forge test -vvv          # from contracts/
 yarn forge:test          # forge test --root contracts
 ```
 
-`foundry.toml`: solc `0.8.24`, optimizer on (`runs = 200`), fuzz `runs = 256`.
+`foundry.toml`: solc `0.8.24`, optimizer on (`runs = 200`), fuzz `runs = 256`. Includes 30 extensive tests covering fuzzing invariants, payout distribution, void refunds, pause mechanics, and admin sweeps.
 
 ### Export ABI & deploy
 
@@ -251,10 +230,8 @@ yarn export:abi          # node scripts/export-abi.mjs
 yarn deploy:market       # prints MARKET_ADDRESS + MARKET_DEPLOY_BLOCK
 ```
 
-Required env for deploy: `RPC_URL`, `SACH_TOKEN_ADDRESS`, `TREASURY_ADDRESS`,
-`OPERATOR_PRIVATE_KEY`, `DEPLOYER_PRIVATE_KEY`, `MIN_STAKE`. The operator
-address is derived from `OPERATOR_PRIVATE_KEY` so it can never drift from the
-key the app signs with.
+Required env for deploy: `RPC_URL`, `SACH_TOKEN_ADDRESS`, `DEPLOYER_PRIVATE_KEY`.
+Optional env: `ADMIN_ADDRESS` (defaults to deployer if unset), `RAKE_BPS` (defaults to 5).
 
 After deploy, set `MARKET_ADDRESS` and `MARKET_DEPLOY_BLOCK` (server + matching
 `NEXT_PUBLIC_*` mirror for the address) in the app env. The indexer starts at
@@ -266,11 +243,11 @@ After deploy, set `MARKET_ADDRESS` and `MARKET_DEPLOY_BLOCK` (server + matching
 
 | Step       | Off-chain code                                                                        | Contract call                            |
 | ---------- | ------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Open pool  | `app/(app)/admin/actions.ts::openPoolAction` → `lib/market.ts::operatorCreatePool`    | `createPool(poolId, expiresAt, rakeBps)` |
-| Place bet  | `components/pools/bet-sheet.tsx` (browser wallet)                                     | `bet(poolId, selection, amount)`         |
-| Resolve    | `lib/football-sync.ts::settleFinishedMatches` or admin action → `operatorResolvePool` | `resolve(poolId, outcome)`               |
+| Open pool  | `app/(app)/admin/actions.ts::openPoolAction` → `lib/market.ts::launchPool`    | `launchPool(poolId, expiresAt)` |
+| Place bet  | `components/pools/bet-sheet.tsx` (browser wallet)                                     | `placeBet(poolId, outcome, amount)`         |
+| Resolve    | `lib/football-sync.ts::settleFinishedMatches` or admin action → `resolvePool` | `resolvePool(poolId, outcome)`               |
 | Claim      | `components/wallet/claim-button.tsx` (browser wallet)                                 | `claim(poolId)`                          |
-| Sweep rake | `lib/market.ts::operatorWithdrawTreasury`                                             | `withdrawTreasury(to)`                   |
+| Sweep treasury | `lib/market.ts::withdrawTreasury`                                             | `withdrawTreasury(token, to, amount)`                   |
 | Mirror     | `lib/indexer.ts::runIndexer` via `/api/cron/index`                                    | `getLogs` + `parseEventLogs`             |
 
 Amounts are always `bigint` base units on chain and stringified strings across
@@ -283,11 +260,10 @@ the RSC boundary.
 ### Done
 
 - Full `SachetMarket` implementation: pool lifecycle, escrow, proportional
-  claims, void/no-winner refunds, rake accrual + sweep, operator rotation,
-  configurable `minStake`.
-- **25/25 Foundry tests passing**, including payout distribution, double-claim
+  claims, void/no-winner refunds, admin sweeps, token updates, access control (`AccessControl`), pausable capabilities.
+- **30/30 Foundry tests passing**, including payout distribution, double-claim
   and double-resolve guards, void and no-winner refunds, treasury access
-  control, and two fuzz invariants (256 runs each).
+  control, and fuzz invariants (256 runs each).
 - Off-chain parity suite (`lib/odds.test.ts`) and pool-id derivation
   (`lib/onchain.ts`).
 - ABI committed as `lib/contracts/sachet-market.ts` via `yarn export:abi`; viem
@@ -302,10 +278,8 @@ the RSC boundary.
   Chain env/keys.
 - **No upgrade path.** The contract is immutable; a bug requires a new deploy
   and event replay into the mirror.
-- **No protocol-level pause or emergency drain.** There is no way to halt
-  betting or rescue stuck funds beyond `withdrawTreasury` for rake.
 - **Dust is not swept.** Rounding remainder stays in the contract by design.
-- **Indexer integration test** (anvil + Postgres) is not in the suite; indexer
+- **Indexer integration test** (anvil + Postgres) is not fully coupled yet; indexer
   correctness is only unit/fuzz-adjacent so far.
 
 If you change the payout math, update `lib/odds.ts` **and**

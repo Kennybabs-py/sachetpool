@@ -3,7 +3,10 @@ pragma solidity ^0.8.24;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+
 
 /// @title SachetMarket
 /// @notice Singleton pari-mutuel market that escrows `$SACH` stakes on 1X2
@@ -11,241 +14,439 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 ///         refundees pull their payout with `claim`.
 /// @dev Money math mirrors the off-chain projection in `lib/odds.ts` exactly:
 ///      integer floor arithmetic, rake floored off the total pot.
-contract SachetMarket is ReentrancyGuard {
+contract SachetMarket is AccessControl, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
-    // ── Outcome codes ─────────────────────────────────────────────────────
-    uint8 public constant OUTCOME_UNRESOLVED = 0;
-    uint8 public constant HOME = 1;
-    uint8 public constant DRAW = 2;
-    uint8 public constant AWAY = 3;
-    uint8 public constant VOID = 4;
+    /// @notice Role designated for platform administration
+    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+    /// @notice Role designated for providing the real-world outcome of a pool
+    bytes32 public constant RESOLVER_ROLE = keccak256("RESOLVER_ROLE");
 
-    // ── Limits ────────────────────────────────────────────────────────────
-    uint16 public constant MAX_RAKE_BPS = 1000; // 10%
-    uint16 public constant BPS_DENOMINATOR = 10_000;
+    /**
+     * @notice Possible outcomes for a bet or a pool result
+     * @dev UNSET is default, VOID results in a full refund.
+     */
+    enum Outcome { UNSET, HOME, DRAW, AWAY, VOID }
 
-    IERC20 public immutable token;
-    address public immutable treasury;
-    address public operator;
-    uint256 public minStake;
+    /**
+     * @notice The current status of a betting pool
+     * @dev UNINITIALIZED is the default state for nonexistent pools.
+     */
+    enum PoolStatus { UNINITIALIZED, OPEN, LOCKED, RESOLVED, CANCELLED }
 
+    /**
+     * @notice Data structure defining a betting pool
+     * @param expiresAt The timestamp when betting locks and the event is presumed to start
+     * @param status The current operational status of the pool
+     * @param result The final outcome of the pool, set by a resolver
+     * @param poolHome Total tokens wagered on the HOME outcome
+     * @param poolDraw Total tokens wagered on the DRAW outcome
+     * @param poolAway Total tokens wagered on the AWAY outcome
+     * @param totalPool The total aggregated tokens wagered across all outcomes
+     * @param totalClaimed Tracks total payouts claimed from this pool (useful for UI/Analytics)
+     * @param rakeBps The snapshotted rake basis points for this pool
+     */
     struct Pool {
         uint64 expiresAt;
-        uint16 rakeBps;
-        uint8 outcome; // 0 = unresolved, 1/2/3, 4 = void
-        bool exists;
-        bool resolved;
-        bool refundMode;
-        uint256 totalStake;
-        uint256[3] stakeBySelection;
-        uint256 winningStake;
-        uint256 paidOut;
-        uint256 treasuryCredit;
+        PoolStatus status;
+        Outcome result;
+        uint256 poolHome;
+        uint256 poolDraw;
+        uint256 poolAway;
+        uint256 totalPool;
+        uint256 totalClaimed;
+        uint256 rakeBps;
     }
 
-    mapping(bytes32 => Pool) private pools;
-    mapping(bytes32 => mapping(address => uint256[3])) private userStake;
-    /// @notice True once an address has claimed a given pool.
-    mapping(bytes32 => mapping(address => bool)) public claimed;
+    /**
+     * @notice Data structure representing a user's bet in a specific pool
+     * @param amount The number of tokens wagered
+     * @param outcome The outcome the user bet on
+     * @param claimed True if the user successfully claimed their winnings or refund
+     */
+    struct Bet {
+        uint256 amount;
+        Outcome outcome;
+        bool claimed;
+    }
 
-    /// @notice Rake accrued across all resolved pools, awaiting withdrawal.
-    uint256 public treasuryBalance;
+    /// @notice Mapping of pool IDs to their respective Pool configurations
+    mapping(bytes32 => Pool) public pools;
+    /// @notice Mapping of pool IDs to user addresses to their respective Bets
+    mapping(bytes32 => mapping(address => Bet)) public bets;
 
-    // ── Events ────────────────────────────────────────────────────────────
-    event PoolCreated(bytes32 indexed poolId, uint64 expiresAt, uint16 rakeBps);
-    event BetPlaced(
-        bytes32 indexed poolId,
-        address indexed bettor,
-        uint8 selection,
-        uint256 amount
-    );
-    event PoolResolved(
-        bytes32 indexed poolId,
-        uint8 outcome,
-        bool refundMode,
-        uint256 winningStake,
-        uint256 treasuryCredit
-    );
-    event Claimed(bytes32 indexed poolId, address indexed bettor, uint256 amount);
-    event TreasuryWithdrawn(address indexed to, uint256 amount);
-    event OperatorChanged(address indexed operator);
-    event MinStakeChanged(uint256 minStake);
+    /// @notice The ERC20 token currently configured for wagering
+    IERC20 public sachetMarketToken;
 
-    // ── Errors ────────────────────────────────────────────────────────────
-    error NotOperator();
-    error PoolExists();
-    error PoolMissing();
-    error AlreadyResolved();
-    error NotResolved();
-    error BettingClosed();
-    error PoolNotExpired();
-    error InvalidSelection();
-    error InvalidOutcome();
-    error RakeTooHigh();
-    error ExpiryInPast();
-    error StakeTooSmall();
+    /// @notice Global rake in basis points (min 1, max 10)
+    uint256 public rakeBps = 1;
+
+    // Custom Errors
+    /// @notice Thrown when attempting to set rake outside allowed range
+    error InvalidRake();
+    /// @notice Thrown when a user attempts to claim a payout more than once
     error AlreadyClaimed();
-    error NothingToClaim();
+    /// @notice Thrown when an admin/resolver attempts an action on a pool that is already finalized
+    error AlreadyResolvedOrCancelled();
+    /// @notice Thrown when a bet is attempted with an amount of 0
+    error AmountMustBeGreaterThan0();
+    /// @notice Thrown when launching a pool with an expiry too far into the future
+    error ExpiresatExceedsMaxDuration();
+    /// @notice Thrown when launching a pool with a past expiry
+    error ExpiresatInPast();
+    /// @notice Thrown when an invalid outcome is selected (e.g., betting on UNSET or VOID)
+    error InvalidOutcome();
+    /// @notice Thrown when a resolver attempts to resolve a pool with an invalid result
+    error InvalidResult();
+    /// @notice Thrown when a user attempts to withdraw a bet they haven't placed
+    error NoActiveBet();
+    /// @notice Thrown when a user attempts to claim but has no winning or refundable bet
+    error NoClaimableBet();
+    /// @notice Thrown when attempting an action that requires the pool to be RESOLVED or CANCELLED
+    error NotResolvedOrCancelled();
+    /// @notice Thrown when an admin attempts to launch a pool ID that is already in use
+    error PoolAlreadyExists();
+    /// @notice Thrown when a user attempts to bet on a pool that has passed its expiry
+    error PoolClosed();
+    /// @notice Thrown when attempting to interact with a pool that does not exist
+    error PoolDoesNotExist();
+    /// @notice Thrown when attempting an action that requires the pool to be OPEN
+    error PoolNotOpen();
+    /// @notice Thrown when attempting to resolve a pool before its expiry time
+    error PoolStillOpen();
+    /// @notice Thrown when the tokens received by the contract for a bet are 0 (e.g., due to fees)
+    error ReceivedAmountMustBeGreaterThan0();
+    /// @notice Thrown when a user attempts to withdraw a bet after the pool has locked
+    error TooLateToWithdraw();
+    /// @notice Thrown when a zero address is provided for critical roles or tokens
+    error ZeroAddress();
+    /// @notice Thrown when an admin attempts to withdraw more treasury tokens than available
+    error AmountExceedsBalance();
+    /// @notice Thrown when a user attempts to change their bet outcome without withdrawing first
+    error CannotChangeOutcome();
+    /// @notice Thrown when attempting to change the market token without sweeping funds first
+    error SweepFirst();
 
-    modifier onlyOperator() {
-        if (msg.sender != operator) revert NotOperator();
-        _;
+    /// @notice Maximum allowed duration between pool creation and expiry
+    uint256 public constant MAX_POOL_DURATION = 30 days;
+
+    // Events
+    event PoolLaunched(bytes32 indexed poolId, uint64 expiresAt);
+    event BetPlaced(bytes32 indexed poolId, address indexed user, Outcome outcome, uint256 amount);
+    event BetWithdrawn(bytes32 indexed poolId, address indexed user, uint256 amount);
+    event PoolResolved(bytes32 indexed poolId, Outcome result);
+    event PoolCancelled(bytes32 indexed poolId);
+    event Claimed(bytes32 indexed poolId, address indexed user, uint256 payout);
+    event TokenUpdated(address indexed oldToken, address indexed newToken);
+    event TreasuryWithdrawn(address indexed token, address indexed to, uint256 amount);
+    event RakeUpdated(uint256 oldRake, uint256 newRake);
+
+
+    /**
+     * @notice Initializes the SachetMarket contract.
+     * @param _sachetMarketToken The address of the ERC20 token used for betting.
+     * @param _adminMultisig The address to be granted DEFAULT_ADMIN_ROLE and ADMIN_ROLE.
+     * @param _rakeBps The initial global rake in basis points (1-10).
+     */
+    constructor(address _sachetMarketToken, address _adminMultisig, uint256 _rakeBps) {
+        if (_sachetMarketToken == address(0)) revert ZeroAddress();
+        if (_adminMultisig == address(0)) revert ZeroAddress();
+        if (_rakeBps < 1 || _rakeBps > 10) revert InvalidRake();
+        
+        sachetMarketToken = IERC20(_sachetMarketToken);
+        rakeBps = _rakeBps;
+        
+        _grantRole(DEFAULT_ADMIN_ROLE, _adminMultisig);
+        _grantRole(ADMIN_ROLE, _adminMultisig);
     }
 
-    constructor(
-        address token_,
-        address treasury_,
-        address operator_,
-        uint256 minStake_
-    ) {
-        require(
-            token_ != address(0) &&
-                treasury_ != address(0) &&
-                operator_ != address(0),
-            "SachetMarket: zero address"
-        );
-        token = IERC20(token_);
-        treasury = treasury_;
-        operator = operator_;
-        minStake = minStake_;
+
+    /**
+     * @notice Pauses the contract, disabling new bets.
+     * @dev Only callable by accounts with the ADMIN_ROLE.
+     */
+    function pause() external onlyRole(ADMIN_ROLE) {
+        _pause();
     }
 
-    // ── Operator lifecycle ────────────────────────────────────────────────
 
-    /// @notice Open a new pool. Betting is rejected at/after `expiresAt`.
-    function createPool(
-        bytes32 poolId,
-        uint64 expiresAt,
-        uint16 rakeBps
-    ) external onlyOperator {
-        Pool storage p = pools[poolId];
-        if (p.exists) revert PoolExists();
-        if (expiresAt <= block.timestamp) revert ExpiryInPast();
-        if (rakeBps > MAX_RAKE_BPS) revert RakeTooHigh();
-
-        p.exists = true;
-        p.expiresAt = expiresAt;
-        p.rakeBps = rakeBps;
-
-        emit PoolCreated(poolId, expiresAt, rakeBps);
+    /**
+     * @notice Unpauses the contract, enabling new bets.
+     * @dev Only callable by accounts with the ADMIN_ROLE.
+     */
+    function unpause() external onlyRole(ADMIN_ROLE) {
+        _unpause();
     }
 
-    /// @notice Stake `amount` on `selection` (1=HOME, 2=DRAW, 3=AWAY).
-    function bet(
-        bytes32 poolId,
-        uint8 selection,
-        uint256 amount
-    ) external nonReentrant {
-        Pool storage p = pools[poolId];
-        if (!p.exists) revert PoolMissing();
-        if (p.resolved) revert AlreadyResolved();
-        if (block.timestamp >= p.expiresAt) revert BettingClosed();
-        if (selection < HOME || selection > AWAY) revert InvalidSelection();
-        if (amount < minStake) revert StakeTooSmall();
 
-        token.safeTransferFrom(msg.sender, address(this), amount);
+    /**
+     * @notice Creates a new betting pool.
+     * @param poolId The unique identifier for the pool.
+     * @param expiresAt The timestamp after which no more bets can be placed.
+     * @dev Only callable by accounts with the ADMIN_ROLE.
+     */
+    function launchPool(bytes32 poolId, uint64 expiresAt) external onlyRole(ADMIN_ROLE) {
+        if (expiresAt <= block.timestamp) revert ExpiresatInPast();
+        if (expiresAt > block.timestamp + MAX_POOL_DURATION) revert ExpiresatExceedsMaxDuration();
+        if (pools[poolId].expiresAt != 0) revert PoolAlreadyExists();
 
-        p.totalStake += amount;
-        p.stakeBySelection[selection - 1] += amount;
-        userStake[poolId][msg.sender][selection - 1] += amount;
+        Pool storage r = pools[poolId];
+        r.expiresAt = expiresAt;
+        r.status = PoolStatus.OPEN;
+        r.rakeBps = rakeBps;
+        // Other fields default to 0/UNSET
 
-        emit BetPlaced(poolId, msg.sender, selection, amount);
+        emit PoolLaunched(poolId, expiresAt);
     }
 
-    /// @notice Resolve a pool. VOID (or a result nobody backed) refunds everyone.
-    function resolve(bytes32 poolId, uint8 outcome) external onlyOperator {
-        Pool storage p = pools[poolId];
-        if (!p.exists) revert PoolMissing();
-        if (p.resolved) revert AlreadyResolved();
-        if (block.timestamp < p.expiresAt) revert PoolNotExpired();
-        if (outcome < HOME || outcome > VOID) revert InvalidOutcome();
 
-        p.resolved = true;
-        p.outcome = outcome;
+    /**
+     * @notice Places a bet on a specific outcome in a pool.
+     * @param poolId The unique identifier for the pool.
+     * @param outcome The predicted outcome (HOME, DRAW, or AWAY).
+     * @param amount The amount of tokens to bet.
+     */
+    function placeBet(bytes32 poolId, Outcome outcome, uint256 amount) external nonReentrant whenNotPaused {
+        Pool storage r = pools[poolId];
+        if (r.expiresAt == 0) revert PoolDoesNotExist();
+        if (block.timestamp >= r.expiresAt) revert PoolClosed();
+        if (r.status != PoolStatus.OPEN) revert PoolNotOpen();
+        if (outcome == Outcome.UNSET || outcome == Outcome.VOID) revert InvalidOutcome();
+        if (amount == 0) revert AmountMustBeGreaterThan0();
 
-        if (outcome == VOID) {
-            p.refundMode = true;
+        Bet storage b = bets[poolId][msg.sender];
+        bool hasActiveBet = (b.amount > 0);
+        
+        if (hasActiveBet) {
+            if (b.outcome != outcome) revert CannotChangeOutcome();
+        }
+
+        uint256 balanceBefore = sachetMarketToken.balanceOf(address(this));
+        sachetMarketToken.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 receivedAmount = sachetMarketToken.balanceOf(address(this)) - balanceBefore;
+        if (receivedAmount == 0) revert ReceivedAmountMustBeGreaterThan0();
+
+        b.amount += receivedAmount;
+        b.outcome = outcome;
+        b.claimed = false;
+        
+
+        if (outcome == Outcome.HOME) {
+            r.poolHome += receivedAmount;
+        } else if (outcome == Outcome.DRAW) {
+            r.poolDraw += receivedAmount;
+        } else if (outcome == Outcome.AWAY) {
+            r.poolAway += receivedAmount;
+        }
+
+        r.totalPool += receivedAmount;
+
+        emit BetPlaced(poolId, msg.sender, outcome, receivedAmount);
+    }
+
+
+    /**
+     * @notice Withdraws a previously placed bet before the pool expires.
+     * @param poolId The unique identifier for the pool.
+     */
+    function withdrawBet(bytes32 poolId) external nonReentrant {
+        Pool storage r = pools[poolId];
+        if (block.timestamp >= r.expiresAt) revert TooLateToWithdraw();
+        if (r.status != PoolStatus.OPEN) revert PoolNotOpen();
+
+        Bet storage b = bets[poolId][msg.sender];
+        if (b.amount == 0) revert NoActiveBet();
+
+        uint256 amountToReturn = b.amount;
+        
+        if (b.outcome == Outcome.HOME) {
+            r.poolHome -= amountToReturn;
+        } else if (b.outcome == Outcome.DRAW) {
+            r.poolDraw -= amountToReturn;
+        } else if (b.outcome == Outcome.AWAY) {
+            r.poolAway -= amountToReturn;
+        }
+
+        r.totalPool -= amountToReturn;
+        
+        b.amount = 0;
+        
+        sachetMarketToken.safeTransfer(msg.sender, amountToReturn);
+        
+        emit BetWithdrawn(poolId, msg.sender, amountToReturn);
+    }
+
+
+    /**
+     * @notice Resolves a pool with the final outcome.
+     * @param poolId The unique identifier for the pool.
+     * @param result The actual real-world outcome of the event.
+     * @dev Only callable by accounts with the RESOLVER_ROLE.
+     */
+    function resolvePool(bytes32 poolId, Outcome result) external onlyRole(RESOLVER_ROLE) {
+        Pool storage r = pools[poolId];
+        if (r.expiresAt == 0) revert PoolDoesNotExist();
+        if (block.timestamp < r.expiresAt) revert PoolStillOpen();
+        if (r.status != PoolStatus.OPEN) revert AlreadyResolvedOrCancelled();
+        if (result == Outcome.UNSET) revert InvalidResult();
+
+        r.status = PoolStatus.RESOLVED;
+        r.result = result;
+
+        emit PoolResolved(poolId, result);
+    }
+
+
+    /**
+     * @notice Cancels a pool, allowing all users to claim a full refund. Emergency Switch
+     * @param poolId The unique identifier for the pool.
+     * @dev Only callable by accounts with the ADMIN_ROLE.
+     */
+    function cancelPool(bytes32 poolId) external onlyRole(ADMIN_ROLE) {
+        Pool storage r = pools[poolId];
+        if (r.expiresAt == 0) revert PoolDoesNotExist();
+        if (r.status != PoolStatus.OPEN) revert PoolNotOpen();
+        
+        r.status = PoolStatus.CANCELLED;
+        
+        emit PoolCancelled(poolId);
+    }
+
+
+    /**
+     * @notice Claims the payout or refund for a resolved or cancelled pool.
+     * @param poolId The unique identifier for the pool.
+     */
+    function claim(bytes32 poolId) external nonReentrant {
+        Pool storage r = pools[poolId];
+        if (r.status != PoolStatus.RESOLVED && r.status != PoolStatus.CANCELLED) revert NotResolvedOrCancelled();
+
+        Bet storage b = bets[poolId][msg.sender];
+        if (b.amount == 0) revert NoClaimableBet();
+        if (b.claimed) revert AlreadyClaimed();
+
+        uint256 payout = 0;
+
+        if (r.status == PoolStatus.CANCELLED || r.result == Outcome.VOID) {
+            payout = b.amount;
         } else {
-            p.winningStake = p.stakeBySelection[outcome - 1];
-            if (p.winningStake == 0) {
-                // Nobody picked the winner: refund in full, take no rake.
-                p.refundMode = true;
+            // RESOLVED
+            Outcome result = r.result;
+            uint256 winningPool;
+
+            if (result == Outcome.HOME) {
+                winningPool = r.poolHome;
+            } else if (result == Outcome.DRAW) {
+                winningPool = r.poolDraw;
+            } else if (result == Outcome.AWAY) {
+                winningPool = r.poolAway;
+            }
+
+            uint256 distributablePot = r.totalPool - ((r.totalPool * r.rakeBps) / 10000);
+
+            if (b.outcome != result) {
+                payout = 0;
+            } else if (winningPool == 0) {
+                payout = 0;
             } else {
-                p.treasuryCredit = (p.totalStake * p.rakeBps) /
-                    BPS_DENOMINATOR;
-                treasuryBalance += p.treasuryCredit;
+                payout = (distributablePot * b.amount) / winningPool;
             }
         }
 
-        emit PoolResolved(
-            poolId,
-            outcome,
-            p.refundMode,
-            p.winningStake,
-            p.treasuryCredit
-        );
-    }
-
-    /// @notice Pull your payout (proportional win, or full refund on a void).
-    function claim(bytes32 poolId) external nonReentrant {
-        Pool storage p = pools[poolId];
-        if (!p.exists) revert PoolMissing();
-        if (!p.resolved) revert NotResolved();
-        if (claimed[poolId][msg.sender]) revert AlreadyClaimed();
-
-        uint256 payout;
-        if (p.refundMode) {
-            uint256[3] storage s = userStake[poolId][msg.sender];
-            payout = s[0] + s[1] + s[2];
-        } else {
-            uint256 stake = userStake[poolId][msg.sender][p.outcome - 1];
-            if (stake == 0) revert NothingToClaim();
-            payout =
-                ((p.totalStake - p.treasuryCredit) * stake) /
-                p.winningStake;
+        b.claimed = true;
+        
+        if (payout > 0) {
+            r.totalClaimed += payout;
+            sachetMarketToken.safeTransfer(msg.sender, payout);
         }
 
-        if (payout == 0) revert NothingToClaim();
-
-        claimed[poolId][msg.sender] = true;
-        p.paidOut += payout;
-
-        token.safeTransfer(msg.sender, payout);
         emit Claimed(poolId, msg.sender, payout);
     }
 
-    function setOperator(address newOperator) external onlyOperator {
-        require(newOperator != address(0), "SachetMarket: zero address");
-        operator = newOperator;
-        emit OperatorChanged(newOperator);
+
+    /**
+     * @notice Updates the ERC20 token used for the market.
+     * @param newToken The address of the new ERC20 token.
+     * @dev Only callable by accounts with the ADMIN_ROLE when the contract is paused.
+     */
+    function updateToken(address newToken) external onlyRole(ADMIN_ROLE) whenPaused {
+        if (newToken == address(0)) revert ZeroAddress();
+        if (sachetMarketToken.balanceOf(address(this)) != 0) revert SweepFirst();
+        address oldToken = address(sachetMarketToken);
+        sachetMarketToken = IERC20(newToken);
+        emit TokenUpdated(oldToken, newToken);
     }
 
-    function setMinStake(uint256 newMinStake) external onlyOperator {
-        minStake = newMinStake;
-        emit MinStakeChanged(newMinStake);
+
+    /**
+     * @notice Withdraws tokens held in the contract to a specified address.
+     * @param token The address of the ERC20 token to withdraw.
+     * @param to The destination address for the tokens.
+     * @param amount The amount of tokens to withdraw (use type(uint256).max for full balance).
+     * @dev Only callable by accounts with the ADMIN_ROLE when the contract is paused.
+     */
+    function withdrawTreasury(address token, address to, uint256 amount) external onlyRole(ADMIN_ROLE) whenPaused {
+        if (to == address(0)) revert ZeroAddress();
+        
+        uint256 bal = IERC20(token).balanceOf(address(this));
+        if (amount == type(uint256).max) {
+            amount = bal;
+        } else if (amount > bal) {
+            revert AmountExceedsBalance();
+        }
+        
+        if (amount > 0) {
+            IERC20(token).safeTransfer(to, amount);
+            emit TreasuryWithdrawn(token, to, amount);
+        }
     }
 
-    /// @notice Sweep accrued rake to `to`.
-    function withdrawTreasury(address to) external onlyOperator {
-        require(to != address(0), "SachetMarket: zero address");
-        uint256 amount = treasuryBalance;
-        treasuryBalance = 0;
-        token.safeTransfer(to, amount);
-        emit TreasuryWithdrawn(to, amount);
+
+    /**
+     * @notice Updates the global rake BPS.
+     * @param newRake The new rake in basis points (1-10).
+     * @dev Only callable by accounts with the ADMIN_ROLE.
+     */
+    function setRakeBps(uint256 newRake) external onlyRole(ADMIN_ROLE) {
+        if (newRake < 1 || newRake > 10) revert InvalidRake();
+        uint256 oldRake = rakeBps;
+        rakeBps = newRake;
+        emit RakeUpdated(oldRake, newRake);
     }
 
-    // ── Views ─────────────────────────────────────────────────────────────
 
+    /**
+     * @notice Retrieves the full state of a specific pool.
+     * @param poolId The unique identifier for the pool.
+     * @return The Pool struct containing all pool details.
+     */
     function getPool(bytes32 poolId) external view returns (Pool memory) {
         return pools[poolId];
     }
 
-    function getUserStake(
-        bytes32 poolId,
-        address user
-    ) external view returns (uint256 home, uint256 draw, uint256 away) {
-        uint256[3] storage s = userStake[poolId][user];
-        return (s[0], s[1], s[2]);
+    
+    /**
+     * @notice Retrieves the bet details for a specific user in a pool.
+     * @param poolId The unique identifier for the pool.
+     * @param user The address of the user.
+     * @return The Bet struct containing the user's bet details.
+     */
+    function getUserStake(bytes32 poolId, address user) external view returns (Bet memory) {
+        return bets[poolId][user];
+    }
+
+
+    /**
+     * @notice Retrieves the effective status of a pool.
+     * @dev Dynamically returns LOCKED if the pool is OPEN but past its expiresAt timestamp.
+     * @param poolId The unique identifier for the pool.
+     * @return The effective PoolStatus.
+     */
+    function getEffectiveStatus(bytes32 poolId) external view returns (PoolStatus) {
+        Pool storage r = pools[poolId];
+        if (r.expiresAt != 0 && r.status == PoolStatus.OPEN && block.timestamp >= r.expiresAt) {
+            return PoolStatus.LOCKED;
+        }
+        return r.status;
     }
 }

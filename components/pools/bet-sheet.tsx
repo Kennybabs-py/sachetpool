@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import posthog from "posthog-js";
 import type { Selection } from "@/generated/prisma/client";
 import type { PoolView } from "@/lib/pools";
 import { projectPayout } from "@/lib/odds";
 import { SELECTION_CODE } from "@/lib/onchain";
-import { formatToken, parseToken } from "@/lib/format";
+import { formatToken, formatTokenInput, parseToken } from "@/lib/format";
 import {
   MARKET_ADDRESS,
   TOKEN_ADDRESS,
@@ -15,8 +16,9 @@ import {
 } from "@/config/chains";
 import { erc20Abi } from "@/lib/contracts/erc20";
 import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
+import { useSachBalance } from "@/hooks/use-sach-balance";
 import {
-  useConnection,
+  useAccount,
   usePublicClient,
   useReadContract,
   useWriteContract,
@@ -34,6 +36,7 @@ import {
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { formatMultiple } from "./format";
+import { toast } from "sonner";
 
 const OUTCOMES: { key: Selection; label: string }[] = [
   { key: "HOME", label: "Home" },
@@ -41,17 +44,22 @@ const OUTCOMES: { key: Selection; label: string }[] = [
   { key: "AWAY", label: "Away" },
 ];
 
-const QUICK_STAKES = ["1", "5", "10", "25"];
+const QUICK_STAKES = ["100", "500", "10000", "25000"];
+const isPostHogConfigured = Boolean(
+  process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
+  process.env.NEXT_PUBLIC_POSTHOG_HOST,
+);
 
 type Phase = "idle" | "approving" | "betting" | "done";
 
 /**
  * Bottom-sheet bet ticket.
  *
- * The stake is escrowed by `SachetMarket.bet`, which pulls `$SACH` with
+ * The stake is escrowed by `SachetMarket.placeBet`, which pulls `$SACH` with
  * `transferFrom` — so the flow is: check allowance, `approve` if short, then
- * `bet`. Both transactions are surfaced in the button label. The projected
- * payout uses the same integer math as the contract.
+ * `placeBet`. Staking again on the same outcome tops up the existing bet. Both
+ * transactions are surfaced in the button label. The projected payout uses the
+ * same integer math as the contract.
  */
 export function BetSheet({
   pool,
@@ -69,18 +77,12 @@ export function BetSheet({
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
 
-  const { address, isConnected } = useConnection();
+  const { address, isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
   const publicClient = usePublicClient();
-  const { mutateAsync } = useWriteContract();
+  const { writeContractAsync: mutateAsync } = useWriteContract();
 
-  const { data: balance, refetch: refetchBalance } = useReadContract({
-    address: TOKEN_ADDRESS,
-    abi: erc20Abi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: Boolean(address && TOKEN_ADDRESS) },
-  });
+  const { balance, refetch: refetchBalance } = useSachBalance();
 
   const { data: allowance, refetch: refetchAllowance } = useReadContract({
     address: TOKEN_ADDRESS,
@@ -88,13 +90,6 @@ export function BetSheet({
     functionName: "allowance",
     args: address && MARKET_ADDRESS ? [address, MARKET_ADDRESS] : undefined,
     query: { enabled: Boolean(address && TOKEN_ADDRESS && MARKET_ADDRESS) },
-  });
-
-  const { data: minStake } = useReadContract({
-    address: MARKET_ADDRESS,
-    abi: sachetMarketAbi,
-    functionName: "minStake",
-    query: { enabled: Boolean(MARKET_ADDRESS) },
   });
 
   // Keep the last real selection so the sheet still shows content while it
@@ -116,12 +111,10 @@ export function BetSheet({
         ? pool.awayTeam
         : "the draw";
 
-  const min = minStake ?? 0n;
   const parsedAmount = parseToken(stakeStr, TOKEN_DECIMALS);
   const amount = parsedAmount ?? 0n;
-  const tooSmall = parsedAmount !== null && amount > 0n && amount < min;
   const overBalance = balance !== undefined && amount > balance;
-  const valid = parsedAmount !== null && amount >= min && !overBalance;
+  const valid = parsedAmount !== null && amount > 0n && !overBalance;
 
   const payout = valid
     ? projectPayout(
@@ -169,7 +162,7 @@ export function BetSheet({
       const betHash = await mutateAsync({
         address: MARKET_ADDRESS,
         abi: sachetMarketAbi,
-        functionName: "bet",
+        functionName: "placeBet",
         args: [
           pool.onchainPoolId as `0x${string}`,
           SELECTION_CODE[active],
@@ -178,14 +171,25 @@ export function BetSheet({
       });
       await publicClient.waitForTransactionReceipt({ hash: betHash });
 
+      if (isPostHogConfigured) {
+        posthog.capture("bet_placed", {
+          selection: active,
+          stake_amount: formatTokenInput(amount, TOKEN_DECIMALS),
+          token_symbol: TOKEN_SYMBOL,
+          required_token_approval: needsApproval,
+        });
+      }
+
       await Promise.all([refetchBalance(), refetchAllowance()]);
       setPhase("done");
       setStakeStr("");
       choose(null);
+      toast.success("Success");
       router.refresh();
     } catch (err) {
       setPhase("idle");
       setError(shortError(err));
+      toast.error(shortError(err));
     }
   }
 
@@ -238,7 +242,7 @@ export function BetSheet({
               htmlFor="stake"
               className="mb-1 block text-xs font-medium text-muted-foreground"
             >
-              Stake ({TOKEN_SYMBOL}) · min {formatToken(min, TOKEN_DECIMALS)}
+              Stake ({TOKEN_SYMBOL})
             </label>
             <input
               id="stake"
@@ -248,7 +252,10 @@ export function BetSheet({
               onChange={(e) =>
                 setStakeStr(e.target.value.replace(/[^0-9.]/g, ""))
               }
-              className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive"
+              className={cn(
+                "w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold",
+                "tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 aria-invalid:border-destructive",
+              )}
               aria-invalid={overBalance || undefined}
             />
             <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -256,7 +263,6 @@ export function BetSheet({
                 const quickAmount = parseToken(quick, TOKEN_DECIMALS);
                 const disabled =
                   quickAmount === null ||
-                  quickAmount < min ||
                   (balance !== undefined && quickAmount > balance);
                 return (
                   <Button
@@ -275,10 +281,10 @@ export function BetSheet({
                 type="button"
                 variant="secondary"
                 size="sm"
-                disabled={balance === undefined || balance < min}
+                disabled={balance === undefined || balance <= 0n}
                 onClick={() =>
                   balance !== undefined &&
-                  setStakeStr(formatToken(balance, TOKEN_DECIMALS, 18))
+                  setStakeStr(formatTokenInput(balance, TOKEN_DECIMALS))
                 }
               >
                 Max
@@ -349,9 +355,7 @@ export function BetSheet({
                         )} on ${activeTeam}`
                       : overBalance
                         ? `Not enough ${TOKEN_SYMBOL}`
-                        : tooSmall
-                          ? `Minimum ${formatToken(min, TOKEN_DECIMALS)} ${TOKEN_SYMBOL}`
-                          : "Enter a stake"}
+                        : "Enter a stake"}
             </PrimaryButton>
           )}
           <Button

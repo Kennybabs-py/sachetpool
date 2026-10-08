@@ -1,0 +1,24 @@
+{
+  "name": "Sachet",
+  "wordmark": "SACHET POOL",
+  "tagline": "The crowd sets the odds.",
+  "subtagline": "The chain settles the pot.",
+  "description": "Pari-mutuel football prediction markets, staked in $SACH on Robinhood Chain.",
+  "url": "https://sachet.market",
+  "colors": {
+    "ink": "#121212",
+    "paper": "#ededed",
+    "pure": "#ffffff"
+  },
+  "mark": {
+    "viewBox": 64,
+    "inset": 5,
+    "stroke": 4
+  },
+  "tile": {
+    "size": 64,
+    "scale": 0.52
+  },
+  "wordmarkTrackingEm": 0.2,
+  "fontStack": "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"
+}

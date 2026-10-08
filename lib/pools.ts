@@ -2,6 +2,25 @@ import "server-only";
 import { prisma } from "./prisma";
 import { PoolStatus, Selection } from "@/generated/prisma/client";
 import { impliedMultiple } from "./odds";
+import { toAmountString, toBigInt, type DecimalLike } from "./amounts";
+import { publicClient } from "./chain/server-client";
+import { sachetMarketAbi } from "./contracts/sachet-market";
+import { MARKET_ADDRESS } from "@/config/chains";
+
+export async function getGlobalRakeBps(): Promise<number> {
+  if (!MARKET_ADDRESS) return 5;
+  try {
+    const rake = await publicClient.readContract({
+      address: MARKET_ADDRESS,
+      abi: sachetMarketAbi,
+      functionName: "rakeBps",
+    });
+    return Number(rake);
+  } catch (e: unknown) {
+    console.log(e);
+    return 5;
+  }
+}
 
 /**
  * Server-side read layer for the board and pool detail.
@@ -54,12 +73,12 @@ type PoolRow = {
   matchId: string;
   onchainPoolId: string;
   status: PoolStatus;
-  rakeBps: number;
   closesAt: Date;
-  totalStake: bigint;
-  stakeHome: bigint;
-  stakeDraw: bigint;
-  stakeAway: bigint;
+  rakeBps: number;
+  totalStake: DecimalLike;
+  stakeHome: DecimalLike;
+  stakeDraw: DecimalLike;
+  stakeAway: DecimalLike;
   winningSelection: Selection | null;
   createTxHash: string | null;
   resolvedTxHash: string | null;
@@ -76,11 +95,13 @@ type PoolRow = {
 };
 
 function toView(pool: PoolRow, now: Date = new Date()): PoolView {
+  const totalStake = toBigInt(pool.totalStake);
   const stakes: Record<Selection, bigint> = {
-    HOME: pool.stakeHome,
-    DRAW: pool.stakeDraw,
-    AWAY: pool.stakeAway,
+    HOME: toBigInt(pool.stakeHome),
+    DRAW: toBigInt(pool.stakeDraw),
+    AWAY: toBigInt(pool.stakeAway),
   };
+  const rakeBps = pool.rakeBps;
   return {
     poolId: pool.id,
     matchId: pool.matchId,
@@ -93,17 +114,17 @@ function toView(pool: PoolRow, now: Date = new Date()): PoolView {
     kickoffAt: pool.match.kickoffAt,
     closesAt: pool.closesAt,
     status: effectiveStatus(pool.status, pool.closesAt, now),
-    rakeBps: pool.rakeBps,
-    totalStake: pool.totalStake.toString(),
+    rakeBps,
+    totalStake: toAmountString(pool.totalStake),
     stakeBySelection: {
       HOME: stakes.HOME.toString(),
       DRAW: stakes.DRAW.toString(),
       AWAY: stakes.AWAY.toString(),
     },
     oddsBySelection: {
-      HOME: impliedMultiple(pool.totalStake, stakes.HOME, pool.rakeBps),
-      DRAW: impliedMultiple(pool.totalStake, stakes.DRAW, pool.rakeBps),
-      AWAY: impliedMultiple(pool.totalStake, stakes.AWAY, pool.rakeBps),
+      HOME: impliedMultiple(totalStake, stakes.HOME, rakeBps),
+      DRAW: impliedMultiple(totalStake, stakes.DRAW, rakeBps),
+      AWAY: impliedMultiple(totalStake, stakes.AWAY, rakeBps),
     },
     winningSelection: pool.winningSelection,
     homeScore: pool.match.homeScore,
@@ -200,13 +221,18 @@ export interface MatchCandidate {
   kickoffAt: Date;
 }
 
-/** Scheduled matches with no pool yet — openable from the admin dashboard. */
+/** Scheduled matches with no launched pool — openable from the admin dashboard. */
 export async function listPoolCandidates(): Promise<MatchCandidate[]> {
   return prisma.match.findMany({
     where: {
       kickoffAt: { gt: new Date() },
       status: "SCHEDULED",
-      pools: { none: {} },
+      // No pool yet, or only a PENDING_ONCHAIN row left by a failed launch, so
+      // a reverted wallet signature can be retried without losing the match.
+      OR: [
+        { pools: { none: {} } },
+        { pools: { every: { status: PoolStatus.PENDING_ONCHAIN } } },
+      ],
     },
     orderBy: { kickoffAt: "asc" },
     select: {
@@ -258,7 +284,7 @@ export async function listAdminPools(
     homeTeam: p.match.homeTeam,
     awayTeam: p.match.awayTeam,
     league: p.match.league,
-    totalStake: p.totalStake.toString(),
+    totalStake: toAmountString(p.totalStake),
     isExpired: p.closesAt.getTime() <= now.getTime(),
   }));
 }
