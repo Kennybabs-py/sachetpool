@@ -12,6 +12,7 @@ import {
   safeWallet,
   rabbyWallet,
   phantomWallet,
+  ledgerWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 
@@ -34,6 +35,7 @@ const wallets = [
   safeWallet,
   rabbyWallet,
   phantomWallet,
+  ledgerWallet,
 ];
 
 /**

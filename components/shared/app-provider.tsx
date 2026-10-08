@@ -14,6 +14,7 @@ import {
   RainbowKitSiweNextAuthProvider,
   type GetSiweMessageOptions,
 } from "@rainbow-me/rainbowkit-siwe-next-auth";
+import { Toaster } from "@/components/ui/sonner";
 import "@rainbow-me/rainbowkit/styles.css";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -82,13 +83,11 @@ export default function AppProvider({ children }: { children: ReactNode }) {
         ? darkTheme({
             accentColor: "#ffffff",
             accentColorForeground: "#121212",
-            borderRadius: "none",
             overlayBlur: "small",
           })
         : lightTheme({
             accentColor: "#121212",
             accentColorForeground: "#ffffff",
-            borderRadius: "none",
             overlayBlur: "small",
           }),
     [isDark],
@@ -103,7 +102,9 @@ export default function AppProvider({ children }: { children: ReactNode }) {
             getSiweMessageOptions={getSiweMessageOptions}
           >
             <RainbowKitProvider theme={rainbowKitTheme}>
-              <TooltipProvider>{children}</TooltipProvider>
+              <TooltipProvider>
+                {children} <Toaster />
+              </TooltipProvider>
             </RainbowKitProvider>
           </RainbowKitSiweNextAuthProvider>
         </SessionProvider>

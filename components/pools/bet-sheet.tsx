@@ -7,7 +7,7 @@ import type { Selection } from "@/generated/prisma/client";
 import type { PoolView } from "@/lib/pools";
 import { projectPayout } from "@/lib/odds";
 import { SELECTION_CODE } from "@/lib/onchain";
-import { formatToken, parseToken } from "@/lib/format";
+import { formatToken, formatTokenInput, parseToken } from "@/lib/format";
 import {
   MARKET_ADDRESS,
   TOKEN_ADDRESS,
@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
 import { formatMultiple } from "./format";
+import { toast } from "sonner";
 
 const OUTCOMES: { key: Selection; label: string }[] = [
   { key: "HOME", label: "Home" },
@@ -173,7 +174,7 @@ export function BetSheet({
       if (isPostHogConfigured) {
         posthog.capture("bet_placed", {
           selection: active,
-          stake_amount: formatToken(amount, TOKEN_DECIMALS, 18),
+          stake_amount: formatTokenInput(amount, TOKEN_DECIMALS),
           token_symbol: TOKEN_SYMBOL,
           required_token_approval: needsApproval,
         });
@@ -183,10 +184,12 @@ export function BetSheet({
       setPhase("done");
       setStakeStr("");
       choose(null);
+      toast.success("Success");
       router.refresh();
     } catch (err) {
       setPhase("idle");
       setError(shortError(err));
+      toast.error(shortError(err));
     }
   }
 
@@ -281,7 +284,7 @@ export function BetSheet({
                 disabled={balance === undefined || balance <= 0n}
                 onClick={() =>
                   balance !== undefined &&
-                  setStakeStr(formatToken(balance, TOKEN_DECIMALS, 18))
+                  setStakeStr(formatTokenInput(balance, TOKEN_DECIMALS))
                 }
               >
                 Max

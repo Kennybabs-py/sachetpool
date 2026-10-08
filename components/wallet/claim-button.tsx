@@ -8,10 +8,11 @@ import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { MARKET_ADDRESS } from "@/config/chains";
 import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
 import { PrimaryButton } from "@/components/common/primary-button";
+import { toast } from "sonner";
 
 const isPostHogConfigured = Boolean(
   process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
-    process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  process.env.NEXT_PUBLIC_POSTHOG_HOST,
 );
 
 /**
@@ -46,6 +47,7 @@ export function ClaimButton({ onchainPoolId }: { onchainPoolId: string }) {
       if (isPostHogConfigured) {
         posthog.capture("payout_claimed");
       }
+      toast.success("Success");
       router.refresh();
     } catch (err) {
       setError(
@@ -53,6 +55,7 @@ export function ClaimButton({ onchainPoolId }: { onchainPoolId: string }) {
           .split("\n")[0]
           .slice(0, 140),
       );
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setPending(false);
     }

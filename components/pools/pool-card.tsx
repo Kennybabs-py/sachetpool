@@ -10,6 +10,7 @@ import { TeamLogo } from "./team-logo";
 import { KickoffTime } from "./kickoff-time";
 import { BetSheet } from "./bet-sheet";
 import { formatMultiple } from "./format";
+import { ArrowRight } from "lucide-react";
 
 const OUTCOMES: { key: Selection; label: string }[] = [
   { key: "HOME", label: "Home" },
@@ -94,15 +95,15 @@ export function PoolCard({
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground tabular-nums">
-          Pot {formatToken(pool.totalStake, TOKEN_DECIMALS)} {TOKEN_SYMBOL}
+        <p className="text-xs text-primary  tabular-nums">
+          Pot: {formatToken(pool.totalStake, TOKEN_DECIMALS)} {TOKEN_SYMBOL}
         </p>
         {showDetailLink && (
           <Link
             href={`/pools/${pool.poolId}`}
-            className="shrink-0 text-xs font-medium text-primary transition-colors hover:text-primary/80"
+            className="flex items-center justify-start gap-1 shrink-0 text-xs font-medium text-primary transition-colors hover:text-primary"
           >
-            Pool details →
+            Pool details <ArrowRight size={13} />
           </Link>
         )}
       </div>

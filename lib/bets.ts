@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "./prisma";
-import { toAmountString } from "./amounts";
+import { toAmountString, toBigInt } from "./amounts";
 import {
   BetStatus,
   PoolStatus,
@@ -34,6 +34,22 @@ export interface UserBetView {
   poolStatus: PoolStatus;
   /** True when the bet can be claimed on-chain. */
   claimable: boolean;
+}
+
+/**
+ * The wallet's current live stake in one pool, as base-unit string, or `null`
+ * when they have no (non-zero) stake there.
+ */
+export async function getUserPoolStake(
+  address: string,
+  poolId: string,
+): Promise<string | null> {
+  const bet = await prisma.bet.findUnique({
+    where: { poolId_address: { poolId, address: address.toLowerCase() } },
+    select: { amount: true },
+  });
+  if (!bet) return null;
+  return toBigInt(bet.amount) > 0n ? toAmountString(bet.amount) : null;
 }
 
 export async function listUserBets(address: string): Promise<UserBetView[]> {
