@@ -42,6 +42,8 @@ export function MobileNav({
   const disconnectWallet = useDisconnectWallet();
   const { openConnectModal } = useConnectModal();
 
+  const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
+
   return (
     <div className="md:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
@@ -68,7 +70,7 @@ export function MobileNav({
                 {link.label}
               </NavLink>
             ))}
-            {isAdmin && (
+            {isAdmin && IS_DEVELOPMENT && (
               <NavLink
                 href="/admin"
                 onClick={() => setOpen(false)}
@@ -77,7 +79,7 @@ export function MobileNav({
                 Admin
               </NavLink>
             )}
-            {isAdmin && (
+            {isAdmin && IS_DEVELOPMENT && (
               <NavLink
                 href="/sandbox"
                 onClick={() => setOpen(false)}
