@@ -1,18 +1,31 @@
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { isAdmin } from "@/lib/admin";
 import { LogoLockup } from "@/components/brand/logo";
 import { NavLink } from "@/components/shared/nav-link";
 import { MobileNav } from "@/components/shared/mobile-nav";
 import { WalletMenu } from "@/components/wallet/wallet-menu";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+import { useSession } from "next-auth/react";
 
+type Props = {
+  address: string | null;
+  admin: boolean;
+};
 /**
  * Top navigation. `address` is `null` for anonymous visitors, who can still
  * browse fixtures — the wallet controls become a connect prompt.
  */
-export function Nav({ address }: { address: string | null }) {
-  const admin = address ? isAdmin(address) : false;
+export function Nav({ address, admin }: Props) {
+  const router = useRouter();
+  const { status } = useSession();
+
+  useEffect(() => {
+    if (status === "authenticated") router.refresh();
+  }, [status, router]);
 
   return (
     <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-border bg-background/80 px-4 py-3 backdrop-blur">

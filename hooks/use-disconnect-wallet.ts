@@ -22,6 +22,6 @@ export function useDisconnectWallet() {
     // Clear the persisted identity before navigation ends this client session.
     if (isPostHogConfigured) posthog.reset();
     if (isConnected) disconnect();
-    await signOut({ callbackUrl: "/" });
+    await signOut();
   };
 }
