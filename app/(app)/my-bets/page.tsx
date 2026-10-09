@@ -1,13 +1,18 @@
 import { getSessionUser } from "@/lib/session";
 import { listUserBets } from "@/lib/bets";
 import { BetRow } from "@/components/wallet/bet-row";
+import { AuthGate } from "@/components/wallet/auth-gate";
 
 export const dynamic = "force-dynamic";
 
-/** The signed-in wallet's bet history and claimable winnings. */
+/**
+ * The signed-in wallet's bet history and claimable winnings, or a sign-in prompt
+ * without a session. Shows an empty state when no bets are found; session and
+ * bet-read errors propagate.
+ */
 export default async function MyBetsPage() {
   const user = await getSessionUser();
-  if (!user) return null;
+  if (!user) return <AuthGate />;
 
   const bets = await listUserBets(user.address);
   const claimable = bets.filter((b) => b.claimable);

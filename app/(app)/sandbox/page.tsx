@@ -2,6 +2,7 @@ import { getSessionUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 import { getSandboxState } from "@/lib/sandbox";
 import { SandboxPanel } from "@/components/admin/sandbox-panel";
+import { AuthGate } from "@/components/wallet/auth-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +12,13 @@ export const dynamic = "force-dynamic";
  *
  * Allowlist-gated here and again inside every server action. The operator key
  * executes all on-chain steps, so the admin's own wallet never signs.
+ * Shows a sign-in prompt without a session, or "Not authorized." for a
+ * signed-in wallet outside the allowlist. Session and database-read errors
+ * propagate; operator account and balance lookup failures yield null fields.
  */
 export default async function SandboxPage() {
   const user = await getSessionUser();
-  if (!user) return null;
+  if (!user) return <AuthGate />;
   if (!isAdmin(user.address)) {
     return (
       <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
