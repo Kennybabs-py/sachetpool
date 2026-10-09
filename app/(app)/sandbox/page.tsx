@@ -2,6 +2,7 @@ import { getSessionUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 import { getSandboxState } from "@/lib/sandbox";
 import { SandboxPanel } from "@/components/admin/sandbox-panel";
+import { AuthGate } from "@/components/wallet/auth-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function SandboxPage() {
   const user = await getSessionUser();
-  if (!user) return null;
+  if (!user) return <AuthGate />;
   if (!isAdmin(user.address)) {
     return (
       <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">

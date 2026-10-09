@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { isAdmin } from "@/lib/admin";
 import { LogoLockup } from "@/components/brand/logo";
 import { NavLink } from "@/components/shared/nav-link";
@@ -6,9 +7,12 @@ import { MobileNav } from "@/components/shared/mobile-nav";
 import { WalletMenu } from "@/components/wallet/wallet-menu";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 
-/** Top navigation for the authenticated app. */
-export function Nav({ address }: { address: string }) {
-  const admin = isAdmin(address);
+/**
+ * Top navigation. `address` is `null` for anonymous visitors, who can still
+ * browse fixtures — the wallet controls become a connect prompt.
+ */
+export function Nav({ address }: { address: string | null }) {
+  const admin = address ? isAdmin(address) : false;
 
   return (
     <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-border bg-background/80 px-4 py-3 backdrop-blur">
@@ -29,7 +33,15 @@ export function Nav({ address }: { address: string }) {
 
       <div className="ml-auto flex items-center gap-2">
         <div className="hidden md:flex">
-          <WalletMenu address={address} />
+          {address ? (
+            <WalletMenu address={address} />
+          ) : (
+            <ConnectButton
+              showBalance={false}
+              accountStatus="address"
+              chainStatus="icon"
+            />
+          )}
         </div>
         <ThemeToggle />
         <MobileNav address={address} isAdmin={admin} />
