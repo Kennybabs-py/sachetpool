@@ -29,6 +29,8 @@ export function Nav({ address, admin }: Props) {
     if (status === "authenticated") router.refresh();
   }, [status, router]);
 
+  const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
+
   return (
     <header className="sticky top-0 z-10 flex items-center gap-4 border-b border-border bg-background/80 px-4 py-3 backdrop-blur">
       <Link
@@ -42,8 +44,8 @@ export function Nav({ address, admin }: Props) {
         <NavLink href="/board">Board</NavLink>
         <NavLink href="/my-bets">My bets</NavLink>
         <NavLink href="/leaderboard">Leaderboard</NavLink>
-        {admin && <NavLink href="/admin">Admin</NavLink>}
-        {admin && <NavLink href="/sandbox">Sandbox</NavLink>}
+        {admin && IS_DEVELOPMENT && <NavLink href="/admin">Admin</NavLink>}
+        {admin && IS_DEVELOPMENT && <NavLink href="/sandbox">Sandbox</NavLink>}
       </nav>
 
       <div className="ml-auto flex items-center gap-2">
