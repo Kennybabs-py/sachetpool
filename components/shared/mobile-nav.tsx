@@ -23,12 +23,14 @@ const LINKS = [
 ] as const;
 
 /**
- * Mobile navigation for the authenticated app.
+ * Mobile navigation for authenticated and anonymous visitors.
  *
  * The inline links collapse into a sheet behind a hamburger, and the wallet
  * section moves down here so the balance, address and Disconnect stay reachable
  * without a desktop-width header. `isAdmin` is resolved on the server and passed
  * in, so the server-only admin list never reaches the client bundle.
+ * Anonymous visitors get a connect button that closes the sheet and opens the
+ * wallet connection modal when available. `isAdmin` controls the admin links.
  */
 export function MobileNav({
   address,

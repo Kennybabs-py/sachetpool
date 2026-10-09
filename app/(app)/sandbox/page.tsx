@@ -12,6 +12,9 @@ export const dynamic = "force-dynamic";
  *
  * Allowlist-gated here and again inside every server action. The operator key
  * executes all on-chain steps, so the admin's own wallet never signs.
+ * Shows a sign-in prompt without a session, or "Not authorized." for a
+ * signed-in wallet outside the allowlist. Session and database-read errors
+ * propagate; operator account and balance lookup failures yield null fields.
  */
 export default async function SandboxPage() {
   const user = await getSessionUser();

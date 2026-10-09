@@ -10,6 +10,8 @@ export const dynamic = "force-dynamic";
  * Admin dashboard: open pools on-chain and resolve/void expired ones.
  *
  * Allowlist-gated here and again inside every server action.
+ * Shows a sign-in prompt without a session, or "Not authorized." for a
+ * signed-in wallet outside the allowlist. Session and pool-read errors propagate.
  */
 export default async function AdminPage() {
   const user = await getSessionUser();
