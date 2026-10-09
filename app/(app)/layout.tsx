@@ -13,6 +13,11 @@ import { isAdmin } from "@/lib/admin";
  */
 export const dynamic = "force-dynamic";
 
+/**
+ * Render navigation and children with or without a session, passing the session
+ * address and server-resolved admin status to the navigation. Children handle
+ * their own access checks. Session lookup errors propagate.
+ */
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getSessionUser();
   const admin = user ? isAdmin(user?.address) : false;

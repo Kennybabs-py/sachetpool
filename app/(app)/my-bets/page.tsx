@@ -5,7 +5,11 @@ import { AuthGate } from "@/components/wallet/auth-gate";
 
 export const dynamic = "force-dynamic";
 
-/** The signed-in wallet's bet history and claimable winnings. */
+/**
+ * The signed-in wallet's bet history and claimable winnings, or a sign-in prompt
+ * without a session. Shows an empty state when no bets are found; session and
+ * bet-read errors propagate.
+ */
 export default async function MyBetsPage() {
   const user = await getSessionUser();
   if (!user) return <AuthGate />;

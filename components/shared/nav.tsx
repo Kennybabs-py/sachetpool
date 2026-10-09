@@ -18,6 +18,8 @@ type Props = {
 /**
  * Top navigation. `address` is `null` for anonymous visitors, who can still
  * browse fixtures — the wallet controls become a connect prompt.
+ * `admin` is the server-resolved flag controlling admin links. Refreshes the
+ * current route when the session becomes authenticated, including on mount.
  */
 export function Nav({ address, admin }: Props) {
   const router = useRouter();
