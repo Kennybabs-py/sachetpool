@@ -316,15 +316,20 @@ settle run normally still has `stillPending > 0`.
 
 `/admin` is gated twice: the app layout requires a SIWE session, and the server
 actions (`app/(app)/admin/actions.ts`) re-check `isAdmin` against
-`ADMIN_ADDRESSES`. Admin wallets never sign directly — every on-chain write is
-executed by the server operator key.
+`ADMIN_ADDRESSES`. The on-chain calls (`launchPool` / `resolvePool`) are signed
+by the **admin's own connected wallet**, so it must hold the contract's
+`ADMIN_ROLE` / `RESOLVER_ROLE`. (The server operator key signs the cron
+auto-settle and sandbox flows instead.)
 
-- **Open pool** — pick a scheduled match with no pool, set expiry and rake
-  (capped at 1000 bps). A DB row is written first as `PENDING_ONCHAIN`, then
-  confirmed to `OPEN` once `createPool` mines; a failure leaves the row
-  retryable.
-- **Resolve pool** — choose `HOME`/`DRAW`/`AWAY`/`VOID`. Already-resolved pools
-  are rejected.
+- **Open pool** — pick a scheduled match with no pool, set expiry. A DB row is
+  written first as `PENDING_ONCHAIN`, then confirmed to `OPEN` once `launchPool`
+  mines; a failure leaves the row retryable.
+- **Resolve pool** — choose `HOME`/`DRAW`/`AWAY`/`VOID` after the pool expires;
+  `resolvePool` reverts `PoolStillOpen` before `expiresAt`. Already-resolved
+  pools are rejected. Run `/api/cron/index` afterwards so the mirror updates.
+
+Settlement operations, the "pool stays open" playbook, and cron scheduling live
+in [`ADMIN_WORKFLOW.md`](./ADMIN_WORKFLOW.md).
 
 ---
 

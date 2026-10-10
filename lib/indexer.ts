@@ -6,8 +6,8 @@ import { indexerClient } from "./chain/server-client";
 import { sachetMarketAbi } from "./contracts/sachet-market";
 import { chain, MARKET_ADDRESS, MARKET_DEPLOY_BLOCK } from "@/config/chains";
 import { codeToSelection } from "./onchain";
-import { winnerPayout } from "./odds";
-import { toAmountString, toBigInt } from "./amounts";
+import { toAmountString } from "./amounts";
+import { applyPoolResolution, reconcileSettledPools } from "./settlement";
 import {
   BetStatus,
   PoolStatus,
@@ -275,68 +275,13 @@ async function handlePoolResolved(
 
   const pool = await prisma.pool.findUnique({
     where: { onchainPoolId: poolId },
+    select: { id: true },
   });
   if (!pool) return;
-  if (
-    pool.status === PoolStatus.RESOLVED ||
-    pool.status === PoolStatus.VOID ||
-    pool.status === PoolStatus.CANCELLED
-  ) {
-    return; // already applied
-  }
 
-  const selection = codeToSelection(outcome);
-  const status =
-    outcome === 4 || !selection ? PoolStatus.VOID : PoolStatus.RESOLVED;
-  const refundMode = status === PoolStatus.VOID;
-
-  await prisma.pool.update({
-    where: { id: pool.id },
-    data: {
-      status,
-      winningSelection: selection ?? undefined,
-      resolvedTxHash: log.transactionHash,
-      settledAt: new Date(),
-    },
-  });
-
-  const winningStake =
-    selection === Selection.HOME
-      ? toBigInt(pool.stakeHome)
-      : selection === Selection.DRAW
-        ? toBigInt(pool.stakeDraw)
-        : toBigInt(pool.stakeAway);
-
-  const bets = await prisma.bet.findMany({
-    where: { poolId: pool.id, status: BetStatus.PENDING },
-  });
-
-  for (const bet of bets) {
-    if (refundMode) {
-      await prisma.bet.update({
-        where: { id: bet.id },
-        data: { status: BetStatus.VOID, payout: toAmountString(bet.amount) },
-      });
-      continue;
-    }
-    if (bet.selection === selection) {
-      const payout = winnerPayout(
-        toBigInt(pool.totalStake),
-        toBigInt(bet.amount),
-        winningStake,
-        pool.rakeBps,
-      );
-      await prisma.bet.update({
-        where: { id: bet.id },
-        data: { status: BetStatus.WON, payout: payout.toString() },
-      });
-    } else {
-      await prisma.bet.update({
-        where: { id: bet.id },
-        data: { status: BetStatus.LOST, payout: "0" },
-      });
-    }
-  }
+  // Shared with the admin `/admin` resolve path; idempotent, so replaying the
+  // event after an admin confirm still settles any bets the action left behind.
+  await applyPoolResolution(pool.id, outcome, log.transactionHash);
 }
 
 async function handleClaimed(args: Record<string, unknown>, log: DecodedLog) {
@@ -528,6 +473,10 @@ export async function runIndexer(): Promise<IndexResult> {
       create: { id, lastBlock },
     });
   }
+
+  // Heal pools resolved through the admin path before it settled bets — the
+  // on-chain event is already recorded, so replaying logs can't fix them.
+  await reconcileSettledPools();
 
   return {
     fromBlock: startBlock.toString(),

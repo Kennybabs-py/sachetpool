@@ -17,6 +17,7 @@ import { PrimaryButton } from "@/components/common/primary-button";
 import { MARKET_ADDRESS } from "@/config/chains";
 import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
 import { cn } from "@/lib/utils";
+import { formatEther } from "viem";
 
 const isPostHogConfigured = Boolean(
   process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN &&
@@ -361,6 +362,11 @@ function ResolveRow({ pool }: { pool: AdminPool }) {
     });
   }
 
+  function handleFormatEther(totalStake: string) {
+    const formatted = formatEther(BigInt(totalStake));
+    return Number(formatted).toLocaleString();
+  }
+
   return (
     <li className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
@@ -368,7 +374,8 @@ function ResolveRow({ pool }: { pool: AdminPool }) {
           {pool.homeTeam} vs {pool.awayTeam}
         </p>
         <p className="text-xs text-muted-foreground">
-          {pool.league} · {pool.status} · staked {pool.totalStake} ·{" "}
+          {pool.league} · {pool.status} · staked{" "}
+          {handleFormatEther(pool.totalStake)} ·{" "}
           {pool.isExpired ? "expired" : "open"}
         </p>
         <Feedback result={result} />
