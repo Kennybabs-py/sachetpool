@@ -45,15 +45,24 @@ export function ClaimButton({ onchainPoolId }: { onchainPoolId: string }) {
         functionName: "claim",
         args: [onchainPoolId as `0x${string}`],
       });
-      await publicClient.waitForTransactionReceipt({ hash });
+      const txReciept = await publicClient.waitForTransactionReceipt({ hash });
+      if (txReciept.status !== "success") {
+        toast.error("Could not be claimed");
+        setPending(false);
+      }
       // Flip the mirror now instead of waiting for the indexer, so the button
       // doesn't linger. The chain was already verified here via the receipt.
-      await confirmClaimAction({ onchainPoolId, txHash: hash });
+      const result = await confirmClaimAction({ onchainPoolId, txHash: hash });
+      if (!result.ok) {
+        toast.error(result.error);
+        setPending(false);
+        throw new Error(result.error);
+      }
       if (isPostHogConfigured) {
         posthog.capture("payout_claimed");
       }
       setDone(true);
-      toast.success("Success");
+      toast.success("Bet claimed successfully.");
       router.refresh();
     } catch (err) {
       setError(

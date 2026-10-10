@@ -39,10 +39,7 @@ export async function confirmClaimAction(input: {
       address: MARKET_ADDRESS,
       abi: sachetMarketAbi,
       functionName: "bets",
-      args: [
-        input.onchainPoolId as `0x${string}`,
-        address as `0x${string}`,
-      ],
+      args: [input.onchainPoolId as `0x${string}`, address as `0x${string}`],
     });
     if (!claimed) return { ok: false, error: "Not claimed on-chain yet." };
   } catch {
