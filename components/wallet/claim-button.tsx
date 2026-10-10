@@ -7,6 +7,7 @@ import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { MARKET_ADDRESS } from "@/config/chains";
 import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
+import { confirmClaimAction } from "@/app/(app)/my-bets/actions";
 import { PrimaryButton } from "@/components/common/primary-button";
 import { toast } from "sonner";
 
@@ -26,6 +27,7 @@ export function ClaimButton({ onchainPoolId }: { onchainPoolId: string }) {
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const [pending, setPending] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function claim() {
@@ -43,11 +45,24 @@ export function ClaimButton({ onchainPoolId }: { onchainPoolId: string }) {
         functionName: "claim",
         args: [onchainPoolId as `0x${string}`],
       });
-      await publicClient.waitForTransactionReceipt({ hash });
+      const txReciept = await publicClient.waitForTransactionReceipt({ hash });
+      if (txReciept.status !== "success") {
+        toast.error("Could not be claimed");
+        setPending(false);
+      }
+      // Flip the mirror now instead of waiting for the indexer, so the button
+      // doesn't linger. The chain was already verified here via the receipt.
+      const result = await confirmClaimAction({ onchainPoolId, txHash: hash });
+      if (!result.ok) {
+        toast.error(result.error);
+        setPending(false);
+        throw new Error(result.error);
+      }
       if (isPostHogConfigured) {
         posthog.capture("payout_claimed");
       }
-      toast.success("Success");
+      setDone(true);
+      toast.success("Bet claimed successfully.");
       router.refresh();
     } catch (err) {
       setError(
@@ -60,6 +75,8 @@ export function ClaimButton({ onchainPoolId }: { onchainPoolId: string }) {
       setPending(false);
     }
   }
+
+  if (done) return null;
 
   return (
     <div className="flex flex-col items-end gap-1">
