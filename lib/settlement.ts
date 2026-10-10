@@ -2,16 +2,8 @@ import "server-only";
 import { prisma } from "./prisma";
 import { toAmountString, toBigInt } from "./amounts";
 import { winnerPayout } from "./odds";
-import {
-  OUTCOME_CODE,
-  codeToSelection,
-  selectionToCode,
-} from "./onchain";
-import {
-  BetStatus,
-  PoolStatus,
-  Selection,
-} from "@/generated/prisma/client";
+import { OUTCOME_CODE, codeToSelection, selectionToCode } from "./onchain";
+import { BetStatus, PoolStatus, Selection } from "@/generated/prisma/client";
 
 /**
  * Apply a resolved pool outcome to the mirror.
