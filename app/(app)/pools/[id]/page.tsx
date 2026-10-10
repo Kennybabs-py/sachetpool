@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPoolDetailData } from "@/lib/pools";
@@ -10,6 +11,32 @@ import { TOKEN_DECIMALS, TOKEN_SYMBOL } from "@/config/chains";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+/** Per-pool social preview title/description; the card image is the sibling
+ * `opengraph-image.tsx`. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const { pool } = await getPoolDetailData(id);
+  if (!pool) return { title: "Pool not found" };
+
+  const title = `${pool.homeTeam} vs ${pool.awayTeam}`;
+  const description = `${pool.league} · pari-mutuel ${TOKEN_SYMBOL} pool on Robinhood Chain. Pot ${formatToken(
+    pool.totalStake,
+    TOKEN_DECIMALS,
+  )} ${TOKEN_SYMBOL}. Back a result and winners split the pot.`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: `/pools/${id}` },
+    openGraph: { title, description, url: `/pools/${id}` },
+    twitter: { card: "summary_large_image", title, description },
+  };
+}
 
 /** Pool detail: fixture, live odds, and the bet sheet. */
 export default async function PoolDetailPage({
