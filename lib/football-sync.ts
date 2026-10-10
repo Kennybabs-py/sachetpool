@@ -24,8 +24,16 @@ import { OUTCOME_CODE, outcomeFromScore } from "./onchain";
  * provider-agnostic and easy to test with a fake.
  */
 
-/** How long after kickoff we keep polling a match before giving up. */
-const SETTLE_LOOKBACK_HOURS = 6;
+/**
+ * Max unresolved matches refreshed per run.
+ *
+ * Settlement has no lower time bound: any past match whose pool is still
+ * OPEN/LOCKED is a candidate, so a pool missed during cron downtime (or one
+ * whose result arrived late) is picked up on a later run instead of being
+ * skipped forever. This cap only bounds provider load; resolved pools drop out
+ * of the candidate set on their own.
+ */
+const SETTLE_MAX_CANDIDATES = 100;
 
 function toMatchStatus(s: NormalisedFixture["status"]): MatchStatus {
   return MatchStatus[s];
@@ -104,16 +112,15 @@ export async function settleFinishedMatches(
   service: FootballService,
   now: Date = new Date(),
 ): Promise<SettleResult> {
-  const lookback = new Date(
-    now.getTime() - SETTLE_LOOKBACK_HOURS * 60 * 60 * 1000,
-  );
-
   const candidates = await prisma.match.findMany({
     where: {
-      kickoffAt: { lte: now, gte: lookback },
+      kickoffAt: { lte: now },
       externalId: { startsWith: `${service.providerId}:` },
       pools: { some: { status: { in: [PoolStatus.OPEN, PoolStatus.LOCKED] } } },
     },
+    // Recent first so live settlement is never starved by an old stuck pool.
+    orderBy: { kickoffAt: "desc" },
+    take: SETTLE_MAX_CANDIDATES,
     select: {
       externalId: true,
       pools: {

@@ -1,11 +1,7 @@
 import "server-only";
 import { prisma } from "./prisma";
 import { toAmountString, toBigInt } from "./amounts";
-import {
-  BetStatus,
-  PoolStatus,
-  Selection,
-} from "@/generated/prisma/client";
+import { BetStatus, PoolStatus, Selection } from "@/generated/prisma/client";
 
 /**
  * Server-side read layer for a wallet's bet history.

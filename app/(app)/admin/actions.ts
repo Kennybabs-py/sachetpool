@@ -4,12 +4,14 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
-import { PoolStatus, PoolType, Selection } from "@/generated/prisma/client";
+import { PoolStatus, PoolType } from "@/generated/prisma/client";
 import {
   computeOnchainPoolId,
+  outcomeToCode,
   type OnchainOutcome,
 } from "@/lib/onchain";
 import { getGlobalRakeBps } from "@/lib/pools";
+import { applyPoolResolution } from "@/lib/settlement";
 
 /**
  * Admin dashboard server actions.
@@ -155,20 +157,19 @@ export async function confirmResolveAction(input: {
     return { ok: false, error: "Pool is already resolved." };
   }
 
-  const selection =
-    input.outcome === "VOID" ? null : (input.outcome as Selection);
-
-  await prisma.pool.update({
-    where: { id: pool.id },
-    data: {
-      status: selection ? PoolStatus.RESOLVED : PoolStatus.VOID,
-      winningSelection: selection ?? undefined,
-      resolvedTxHash: input.txHash,
-      settledAt: new Date(),
-    },
-  });
+  // Flip the pool *and* settle its bets (WON/LOST/VOID + payout) so `claimable`
+  // turns true immediately — matching what the indexer does when it mirrors the
+  // on-chain `PoolResolved` event. Without this the pool reads resolved while
+  // every bet stays PENDING and winners can never claim.
+  await applyPoolResolution(
+    pool.id,
+    outcomeToCode(input.outcome),
+    input.txHash,
+  );
 
   revalidatePath("/admin");
   revalidatePath("/");
+  revalidatePath("/my-bets");
+  revalidatePath("/board");
   return { ok: true, message: `Pool resolved as ${input.outcome}.` };
 }
