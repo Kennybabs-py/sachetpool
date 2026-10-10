@@ -7,6 +7,7 @@ import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { MARKET_ADDRESS } from "@/config/chains";
 import { sachetMarketAbi } from "@/lib/contracts/sachet-market";
+import { confirmClaimAction } from "@/app/(app)/my-bets/actions";
 import { PrimaryButton } from "@/components/common/primary-button";
 import { toast } from "sonner";
 
@@ -26,6 +27,7 @@ export function ClaimButton({ onchainPoolId }: { onchainPoolId: string }) {
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
   const [pending, setPending] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function claim() {
@@ -44,9 +46,13 @@ export function ClaimButton({ onchainPoolId }: { onchainPoolId: string }) {
         args: [onchainPoolId as `0x${string}`],
       });
       await publicClient.waitForTransactionReceipt({ hash });
+      // Flip the mirror now instead of waiting for the indexer, so the button
+      // doesn't linger. The chain was already verified here via the receipt.
+      await confirmClaimAction({ onchainPoolId, txHash: hash });
       if (isPostHogConfigured) {
         posthog.capture("payout_claimed");
       }
+      setDone(true);
       toast.success("Success");
       router.refresh();
     } catch (err) {
@@ -60,6 +66,8 @@ export function ClaimButton({ onchainPoolId }: { onchainPoolId: string }) {
       setPending(false);
     }
   }
+
+  if (done) return null;
 
   return (
     <div className="flex flex-col items-end gap-1">

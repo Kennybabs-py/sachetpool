@@ -17,8 +17,6 @@ export default async function MyBetsPage() {
   const bets = await listUserBets(user.address);
   const claimable = bets.filter((b) => b.claimable);
 
-  console.log(bets);
-
   return (
     <div className="flex flex-col gap-4">
       <div>
